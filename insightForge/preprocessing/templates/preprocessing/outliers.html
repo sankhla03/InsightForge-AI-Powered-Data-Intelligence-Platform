@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Outlier Detection</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 30px;
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            margin-top: 20px;
+            margin-bottom: 20px;
+        }
+        .card {
+            border: 1px solid #ccc;
+            padding: 15px;
+            background: #f9f9f9;
+        }
+        .scrollable-table {
+            max-height: 400px;
+            overflow-y: auto;
+            overflow-x: auto;
+            margin-top: 20px;
+            border: 1px solid #ccc;
+        }
+        table {
+            margin-top: 20px;
+            border-collapse: collapse;
+            width: 100%;
+        }
+        th, td {
+            padding: 8px;
+            border: 1px solid #ccc;
+            text-align: left;
+        }
+        .toggle-btn {
+            background: #5a6268;
+            color: white;
+            border: none;
+            padding: 10px 18px;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+        .toggle-btn:hover {
+            background: #4a5258;
+        }
+        .editable-table input {
+            width: 100%;
+            border: none;
+            background: transparent;
+            padding: 4px;
+        }
+        .editable-table input:focus {
+            background: #fff;
+            outline: 2px solid #5a6268;
+        }
+        .save-btn {
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            cursor: pointer;
+            margin-top: 15px;
+        }
+        .save-btn:hover {
+            background: #218838;
+        }
+        .outlier-cell {
+            background-color: #ffcccc;
+            font-weight: bold;
+            color: #cc0000;
+        }
+        .capped-cell {
+            background-color: #fff3cd;
+            font-weight: bold;
+            color: #856404;
+            border: 2px solid #ffc107;
+        }
+        .legend {
+            margin-top: 15px;
+            padding: 10px;
+            background: #f8f9fa;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .legend-item {
+            display: inline-block;
+            margin-right: 20px;
+        }
+        .legend-color {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            vertical-align: middle;
+            margin-right: 5px;
+            border: 1px solid #ccc;
+        }
+    </style>
+</head>
+<body>
+
+<h2>Outlier Detection (IQR)</h2>
+
+<div class="stats">
+    <div class="card">
+        <b>Total Rows</b><br>
+        {{ total_rows }}
+    </div>
+
+    <div class="card">
+        <b>Outliers Detected</b><br>
+        {{ outlier_count }}
+    </div>
+</div>
+
+{% if outlier_count > 0 %}
+<div class="outlier-section">
+    <button class="toggle-btn" onclick="toggleOutliers()">
+        Show/Hide Outlier Rows
+    </button>
+    
+    <div class="legend">
+        <strong>Legend:</strong>
+        <span class="legend-item">
+            <span class="legend-color" style="background-color: #ffcccc;"></span>
+            Outlier Value (detected by IQR)
+        </span>
+    </div>
+    
+    <div id="outlierTableContainer" class="scrollable-table" style="display: none;">
+        <table id="outlierTable">
+            <thead id="outlierHead"></thead>
+            <tbody id="outlierBody"></tbody>
+        </table>
+    </div>
+</div>
+
+<script type="text/javascript">
+var outlierData = {{ outlier_data_json|safe }};
+var outlierDetails = {{ outlier_details_json|safe }};
+
+function toggleOutliers() {
+    var container = document.getElementById('outlierTableContainer');
+    if (container.style.display === 'none') {
+        container.style.display = 'block';
+        renderOutliers();
+    } else {
+        container.style.display = 'none';
+    }
+}
+
+function renderOutliers() {
+    var theadEl = document.getElementById('outlierHead');
+    var tbodyEl = document.getElementById('outlierBody');
+    
+    if (!outlierData || outlierData.length === 0) {
+        theadEl.innerHTML = '<tr><th>No outliers found</th></tr>';
+        tbodyEl.innerHTML = '';
+        return;
+    }
+    
+    var columns = Object.keys(outlierData[0]);
+    var headerRow = '<tr>';
+    for (var i = 0; i < columns.length; i++) {
+        headerRow += '<th>' + escapeHtmlStr(columns[i]) + '</th>';
+    }
+    headerRow += '</tr>';
+    theadEl.innerHTML = headerRow;
+    
+    var bodyContent = '';
+    for (var j = 0; j < outlierData.length; j++) {
+        var rowData = outlierData[j];
+        var rowIdx = rowData.index !== undefined && rowData.index !== null ? String(rowData.index) : String(j);
+        bodyContent += '<tr>';
+        for (var k = 0; k < columns.length; k++) {
+            var colName = columns[k];
+            var cellVal = rowData[colName];
+            if (cellVal === null || cellVal === undefined) {
+                cellVal = '';
+            }
+            
+            var hasOutlier = false;
+            var rowOutliers = outlierDetails[rowIdx];
+            if (rowOutliers) {
+                for (var m = 0; m < rowOutliers.length; m++) {
+                    if (rowOutliers[m].column === colName) {
+                        hasOutlier = true;
+                        break;
+                    }
+                }
+            }
+            
+            var cls = hasOutlier ? 'outlier-cell' : '';
+            bodyContent += '<td class="' + cls + '">' + escapeHtmlStr(String(cellVal)) + '</td>';
+        }
+        bodyContent += '</tr>';
+    }
+    tbodyEl.innerHTML = bodyContent;
+}
+
+function escapeHtmlStr(text) {
+    if (text === null || text === undefined) {
+        return '';
+    }
+    var div = document.createElement('div');
+    div.textContent = String(text);
+    return div.innerHTML;
+}
+</script>
+{% endif %}
+
+{% if removed %}
+    {% if method == "winsorized" %}
+        <p style="color: #5a6268;">Outliers capped successfully using Winsorization</p>
+        
+        <h3 style="margin-top: 25px;">Capped Outliers (Editable)</h3>
+        <p style="color: #666;">These rows contained outliers that were capped. Capped values are highlighted.</p>
+        
+        <div class="legend">
+            <strong>Legend:</strong>
+            <span class="legend-item">
+                <span class="legend-color" style="background-color: #fff3cd; border: 2px solid #ffc107;"></span>
+                Capped Value (was modified)
+            </span>
+        </div>
+        
+        <button class="toggle-btn" onclick="toggleCappedData()">
+            Show/Hide Capped Dataset
+        </button>
+        
+        <div id="cappedTableContainer" class="scrollable-table" style="display: none;">
+            <table id="cappedTable" class="editable-table">
+                <thead id="cappedHead"></thead>
+                <tbody id="cappedBody"></tbody>
+            </table>
+        </div>
+        
+        <button class="save-btn" onclick="saveCappedData()">
+            Save Changes
+        </button>
+        
+        <script type="text/javascript">
+        var cappedData = {{ capped_data_json|safe }};
+        var originalOutlierValues = {{ original_outlier_json|safe }};
+        
+        function toggleCappedData() {
+            var container = document.getElementById('cappedTableContainer');
+            if (container.style.display === 'none') {
+                container.style.display = 'block';
+                renderCappedData();
+            } else {
+                container.style.display = 'none';
+            }
+        }
+        
+        function renderCappedData() {
+            var theadEl = document.getElementById('cappedHead');
+            var tbodyEl = document.getElementById('cappedBody');
+            
+            if (!cappedData || cappedData.length === 0) {
+                theadEl.innerHTML = '<tr><th>No data available</th></tr>';
+                tbodyEl.innerHTML = '';
+                return;
+            }
+            
+            var columns = Object.keys(cappedData[0]);
+            var headerRow = '<tr>';
+            for (var i = 0; i < columns.length; i++) {
+                headerRow += '<th>' + escapeHtmlStr(columns[i]) + '</th>';
+            }
+            headerRow += '</tr>';
+            theadEl.innerHTML = headerRow;
+            
+            var bodyContent = '';
+            for (var j = 0; j < cappedData.length; j++) {
+                var rowIdx = String(j);
+                var origRow = originalOutlierValues ? originalOutlierValues[rowIdx] : null;
+                bodyContent += '<tr>';
+                for (var k = 0; k < columns.length; k++) {
+                    var colName = columns[k];
+                    var cellVal = cappedData[j][colName];
+                    if (cellVal === null || cellVal === undefined) {
+                        cellVal = '';
+                    }
+                    
+                    var isCapped = false;
+                    var origVal = '';
+                    if (origRow && origRow[colName] !== undefined) {
+                        origVal = origRow[colName];
+                        if (typeof cellVal === 'number' && typeof origVal === 'number') {
+                            if (Math.abs(cellVal - origVal) > 0.001) {
+                                isCapped = true;
+                            }
+                        } else if (String(cellVal) !== String(origVal)) {
+                            isCapped = true;
+                        }
+                    }
+                    
+                    var cellCls = isCapped ? 'capped-cell' : '';
+                    var cellTitle = isCapped ? 'Original: ' + String(origVal) : '';
+                    bodyContent += '<td class="' + cellCls + '" title="' + escapeHtmlStr(cellTitle) + '"><input type="text" value="' + escapeHtmlStr(String(cellVal)) + '" data-row="' + j + '" data-col="' + colName + '" onchange="updateCappedData(this)"></td>';
+                }
+                bodyContent += '</tr>';
+            }
+            tbodyEl.innerHTML = bodyContent;
+        }
+        
+        function updateCappedData(inputEl) {
+            var row = parseInt(inputEl.getAttribute('data-row'), 10);
+            var col = inputEl.getAttribute('data-col');
+            var val = inputEl.value;
+            if (!isNaN(val) && val !== '') {
+                val = parseFloat(val);
+            }
+            cappedData[row][col] = val;
+        }
+        
+        function saveCappedData() {
+            var formEl = document.createElement('form');
+            formEl.method = 'POST';
+            formEl.action = '';
+            
+            var csrfInput = document.createElement('input');
+            csrfInput.type = 'hidden';
+            csrfInput.name = 'csrfmiddlewaretoken';
+            csrfInput.value = '{{ csrf_token }}';
+            formEl.appendChild(csrfInput);
+            
+            var dataInput = document.createElement('input');
+            dataInput.type = 'hidden';
+            dataInput.name = 'capped_data';
+            dataInput.value = JSON.stringify(cappedData);
+            formEl.appendChild(dataInput);
+            
+            var actionInput = document.createElement('input');
+            actionInput.type = 'hidden';
+            actionInput.name = 'action';
+            actionInput.value = 'save_capped';
+            formEl.appendChild(actionInput);
+            
+            document.body.appendChild(formEl);
+            formEl.submit();
+        }
+        </script>
+    {% else %}
+        <p style="color: #5a6268;">Outliers removed successfully</p>
+    {% endif %}
+    <p>Dataset updated with your choice.</p>
+    
+    <div class="nav-links" style="margin-top: 20px;">
+        <a href="{% url 'label_noise' %}">
+            <button style="background: #5a6268; color: white; padding: 10px 20px; border: none; cursor: pointer; border-radius: 4px;">Continue to Noise Handle</button>
+        </a>
+    </div>
+{% else %}
+    {% if outlier_count > 0 %}
+    <p style="margin-top: 25px;">Choose how to handle outliers:</p>
+
+    <form method="post" style="margin: 20px 0;">
+        {% csrf_token %}
+        <div style="margin-bottom: 15px;">
+            <button type="submit" name="action" value="remove" style="background: #5a6268; color: white; padding: 12px 24px; border: none; cursor: pointer; border-radius: 4px; margin-right: 10px; font-size: 16px;">
+                Remove Outliers
+            </button>
+            <span style="color: #666;">(Deletes rows containing outliers)</span>
+        </div>
+        <div>
+            <button type="submit" name="action" value="winsorize" style="background: #5a6268; color: white; padding: 12px 24px; border: none; cursor: pointer; border-radius: 4px; font-size: 16px;">
+                Outlier Capping (IQR-based)
+            </button>
+            <span style="color: #666;">(Caps outliers using IQR bounds, preserves all rows)</span>
+        </div>
+    </form>
+    {% endif %}
+{% endif %}
+
+</body>
+</html>
+

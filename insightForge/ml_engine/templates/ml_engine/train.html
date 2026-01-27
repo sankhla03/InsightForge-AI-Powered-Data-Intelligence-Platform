@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Model Training</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 30px;
+            max-width: 1400px;
+            margin: 0 auto;
+            background: #f5f5f5;
+        }
+        h2, h3, h4 { color: #333; }
+        select, button {
+            padding: 12px;
+            margin: 6px 0;
+            font-size: 16px;
+            border-radius: 6px;
+        }
+        button {
+            cursor: pointer;
+            background: #4f46e5;
+            color: white;
+            border: none;
+            font-weight: bold;
+        }
+        button:hover { background: #4338ca; }
+        .form-box {
+            border: 1px solid #ddd;
+            padding: 25px;
+            margin-bottom: 25px;
+            border-radius: 12px;
+            background: white;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 15px 0;
+            font-size: 14px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 12px 8px;
+            text-align: center;
+        }
+        th { background: #4f46e5; color: white; }
+        tr:nth-child(even) { background: #f8f9fa; }
+        .best-row { background: #d4edda; }
+        .feature-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin: 10px 0;
+        }
+        .feature-tag {
+            background: #e9ecef;
+            padding: 5px 12px;
+            border-radius: 15px;
+        }
+        .result-section {
+            margin-top: 25px;
+            padding: 25px;
+            background: white;
+            border-radius: 12px;
+        }
+        .btn-next {
+            background: #10b981;
+            padding: 14px 28px;
+            font-size: 16px;
+            margin: 20px 10px 10px 0;
+        }
+        .btn-next:hover { background: #059669; }
+        .metric-box {
+            display: inline-block;
+            padding: 10px 15px;
+            margin: 5px;
+            border-radius: 8px;
+        }
+        .metric-value { font-size: 24px; color: #4f46e5; }
+        .metric-label { font-size: 12px; color: #666; }
+        .explanation-box {
+            background: #e7f3ff;
+            border-left: 4px solid #4f46e5;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        .model-card {
+            border: 2px solid #28a745;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+            background: #f0fff4;
+        }
+        .highlight { background: #d4edda; font-weight: bold; }
+        .cm-container {
+            text-align: center;
+            margin: 20px 0;
+        }
+        .cm-container img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        .cm-metrics-table {
+            width: auto;
+            margin: 20px auto;
+        }
+        .cm-metrics-table th {
+            background: #28a745;
+        }
+        .tp { color: #28a745; font-weight: bold; }
+        .fp { color: #dc3545; font-weight: bold; }
+        .fn { color: #ffc107; font-weight: bold; }
+        .tn { color: #17a2b8; font-weight: bold; }
+        .regression-metrics th { background: #28a745; }
+        .plot-container {
+            text-align: center;
+            margin: 20px 0;
+        }
+        .plot-container img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        .task-badge {
+            display: inline-block;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+        .task-badge.classification { background: #e3f2fd; color: #1976d2; }
+        .task-badge.regression { background: #fff3e0; color: #f57c00; }
+        .importance-bar-container {
+            margin: 15px 0;
+        }
+        .importance-bar {
+            display: flex;
+            align-items: center;
+            margin: 8px 0;
+        }
+        .importance-label {
+            width: 150px;
+            font-weight: bold;
+        }
+        .importance-bar-bg {
+            flex: 1;
+            height: 20px;
+            background: #e0e0e0;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        .importance-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #4f46e5, #10b981);
+            border-radius: 10px;
+        }
+        .importance-value {
+            width: 80px;
+            text-align: right;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+<h2>Model Training and Comparison</h2>
+
+<div class="form-box">
+    <form method="post">
+        {% csrf_token %}
+        <label><strong>Select Target Variable:</strong></label><br>
+        <select name="target" required style="width: 100%; max-width: 400px;">
+            <option value="">-- Select Target --</option>
+            {% for col in columns %}
+                <option value="{{ col }}" {% if col == saved_target %}selected{% endif %}>{{ col }}</option>
+            {% endfor %}
+        </select>
+        <br><br>
+        <button type="submit">Train All Models</button>
+    </form>
+</div>
+
+{% if results %}
+<div class="result-section">
+    <h3>Model Comparison Results</h3>
+    <p>
+        <strong>Target:</strong> {{ results.target }} | 
+        <strong>Task Type:</strong> 
+        <span class="task-badge {{ results.task_type }}">
+            {{ results.task_type|title }}
+        </span>
+        {% if results.task_type == 'classification' %}
+        | <strong>Classes:</strong> {{ results.n_classes }}
+        {% else %}
+        | <strong>Target Range:</strong> {{ results.y_test_min }} - {{ results.y_test_max }}
+        {% endif %}
+    </p>
+    
+    <h4>Features Used ({{ results.features|length }}):</h4>
+    <div class="feature-list">
+        {% for f in results.features %}
+            <span class="feature-tag">{{ f }}</span>
+        {% endfor %}
+    </div>
+
+    <h3>Model Performance Comparison</h3>
+    
+    {% if results.task_type == 'classification' %}
+    <div class="explanation-box">
+        <strong>Classification Metrics:</strong> Accuracy - Overall correctness | Precision - Correct predictions
+        | Recall - Found positives | F1-Score - Balance of P&R | ROC-AUC - Class distinction (1.0=perfect)
+    </div>
+    
+    <table>
+        <thead>
+            <tr>
+                <th>Model</th>
+                <th>Accuracy (%)</th>
+                <th>Precision (%)</th>
+                <th>Recall (%)</th>
+                <th>F1-Score (%)</th>
+                <th>ROC-AUC (%)</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for model in results.model_results_list %}
+            <tr class="{% if model.is_best %}best-row{% endif %}">
+                <td style="text-align: left; font-weight: {% if model.is_best %}bold{% endif %};">
+                    {% if model.is_best %}BEST: {% endif %}{{ model.name }}
+                </td>
+                <td>{{ model.accuracy }}</td>
+                <td>{{ model.precision }}</td>
+                <td>{{ model.recall }}</td>
+                <td class="{% if model.is_best %}highlight{% endif %}">{{ model.f1 }}</td>
+                <td>{{ model.roc_auc }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div class="model-card">
+        <h3 style="margin-top: 0; color: #28a745;">Best Classification Model: {{ results.best_model }}</h3>
+        
+        <div>
+            <div class="metric-box" style="background: #e3f2fd;">
+                <div class="metric-value">{{ results.best_accuracy }}%</div>
+                <div class="metric-label">Accuracy</div>
+            </div>
+            <div class="metric-box" style="background: #fce4ec;">
+                <div class="metric-value">{{ results.best_precision }}%</div>
+                <div class="metric-label">Precision</div>
+            </div>
+            <div class="metric-box" style="background: #fff3e0;">
+                <div class="metric-value">{{ results.best_recall }}%</div>
+                <div class="metric-label">Recall</div>
+            </div>
+            <div class="metric-box" style="background: #e8f5e9; border: 2px solid #28a745;">
+                <div class="metric-value">{{ results.best_f1 }}%</div>
+                <div class="metric-label">F1-Score</div>
+            </div>
+            <div class="metric-box" style="background: #f3e5f5;">
+                <div class="metric-value">{{ results.best_roc_auc }}%</div>
+                <div class="metric-label">ROC-AUC</div>
+            </div>
+        </div>
+
+        <h4>Why {{ results.best_model }} is the Best Choice:</h4>
+        <ul style="line-height: 1.8;">
+            <li><strong>Highest F1-Score ({{ results.best_f1 }}%):</strong> Best balance between Precision and Recall</li>
+            <li><strong>ROC-AUC ({{ results.best_roc_auc }}%):</strong> Excellent class distinction ability</li>
+            <li><strong>Accuracy ({{ results.best_accuracy }}%):</strong> Overall best performance</li>
+        </ul>
+        
+        <div class="explanation-box" style="background: #d4edda; border-left-color: #28a745;">
+            <strong>Recommendation:</strong> 
+            {% if results.n_classes == 2 %}
+            For binary classification, {{ results.best_model }} provides optimal balance between catching positives and minimizing false alarms.
+            {% else %}
+            For multi-class, {{ results.best_model }} achieves the best weighted F1-score.
+            {% endif %}
+        </div>
+    </div>
+
+    {% if results.cm_image_path %}
+    <h3>Confusion Matrix - {{ results.best_model }}</h3>
+    
+    <div class="cm-container">
+        <img src="{{ results.cm_image_path }}" alt="Confusion Matrix Heatmap">
+    </div>
+    
+    {% if results.cm_metrics %}
+    <h4>Confusion Matrix Metrics</h4>
+    <table class="cm-metrics-table">
+        <thead>
+            <tr>
+                <th>Class</th>
+                <th class="tp">TP (True Positive)</th>
+                <th class="fp">FP (False Positive)</th>
+                <th class="fn">FN (False Negative)</th>
+                <th class="tn">TN (True Negative)</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for metric in results.cm_metrics %}
+            <tr>
+                <td style="font-weight: bold;">{{ metric.class }}</td>
+                <td class="tp">{{ metric.tp }}</td>
+                <td class="fp">{{ metric.fp }}</td>
+                <td class="fn">{{ metric.fn }}</td>
+                <td class="tn">{{ metric.tn }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    
+    <div class="explanation-box">
+        <strong>Metric Meanings:</strong><br>
+        <span class="tp">TP (True Positive):</span> Correctly predicted as this class<br>
+        <span class="fp">FP (False Positive):</span> Wrongly predicted as this class<br>
+        <span class="fn">FN (False Negative):</span> This class wrongly predicted as another<br>
+        <span class="tn">TN (True Negative):</span> Correctly NOT predicted as this class
+    </div>
+    {% endif %}
+    {% endif %}
+    
+    {% else %}
+    <!-- REGRESSION DISPLAY -->
+    <div class="explanation-box">
+        <strong>Regression Metrics:</strong> Accuracy - % of predictions within 10% tolerance | MAE (Mean Absolute Error) - Average prediction error | 
+        RMSE (Root Mean Squared Error) - Penalizes larger errors | R² (R-squared) - Variance explained (100%=perfect)
+    </div>
+    
+    <table class="regression-metrics">
+        <thead>
+            <tr>
+                <th>Model</th>
+                <th>Accuracy (%)</th>
+                <th>MAE</th>
+                <th>RMSE</th>
+                <th>R² (%)</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for model in results.model_results_list %}
+            <tr class="{% if model.is_best %}best-row{% endif %}">
+                <td style="text-align: left; font-weight: {% if model.is_best %}bold{% endif %};">
+                    {% if model.is_best %}BEST: {% endif %}{{ model.name }}
+                </td>
+                <td class="{% if model.is_best %}highlight{% endif %}">{{ model.accuracy }}</td>
+                <td>{{ model.mae }}</td>
+                <td>{{ model.rmse }}</td>
+                <td>{{ model.r2 }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div class="model-card">
+        <h3 style="margin-top: 0; color: #28a745;">Best Regression Model: {{ results.best_model }}</h3>
+        
+        <div>
+            <div class="metric-box" style="background: #d4edda; border: 2px solid #28a745;">
+                <div class="metric-value">{{ results.best_accuracy }}%</div>
+                <div class="metric-label">Accuracy</div>
+            </div>
+            <div class="metric-box" style="background: #e8f5e9; border: 2px solid #28a745;">
+                <div class="metric-value">{{ results.best_r2 }}%</div>
+                <div class="metric-label">R² Score</div>
+            </div>
+            <div class="metric-box" style="background: #e3f2fd;">
+                <div class="metric-value">{{ results.best_mae }}</div>
+                <div class="metric-label">MAE</div>
+            </div>
+            <div class="metric-box" style="background: #fce4ec;">
+                <div class="metric-value">{{ results.best_rmse }}</div>
+                <div class="metric-label">RMSE</div>
+            </div>
+        </div>
+
+        <h4>Why {{ results.best_model }} is the Best Choice:</h4>
+        <ul style="line-height: 1.8;">
+            <li><strong>Highest Accuracy ({{ results.best_accuracy }}%):</strong> Predictions within 10% tolerance of actual values</li>
+            <li><strong>Highest R² ({{ results.best_r2 }}%):</strong> Explains most variance in target variable</li>
+            <li><strong>Lowest MAE ({{ results.best_mae }}):</strong> Smallest average prediction error</li>
+            <li><strong>Lowest RMSE ({{ results.best_rmse }}):</strong> Minimizes impact of large errors</li>
+        </ul>
+        
+        <div class="explanation-box" style="background: #d4edda; border-left-color: #28a745;">
+            <strong>Recommendation:</strong> 
+            {{ results.best_model }} provides the best fit for your regression problem, minimizing prediction errors across all test samples.
+        </div>
+    </div>
+
+    <!-- Actual vs Predicted Plot -->
+    {% if results.avp_image_path %}
+    <h3>Actual vs Predicted - {{ results.best_model }}</h3>
+    <div class="plot-container">
+        <img src="{{ results.avp_image_path }}" alt="Actual vs Predicted Plot">
+    </div>
+    <p><em>Points closer to the red dashed line indicate better predictions.</em></p>
+    {% endif %}
+
+    <!-- Residuals Plot -->
+    {% if results.residuals_image_path %}
+    <h3>Residuals Distribution - {{ results.best_model }}</h3>
+    <div class="plot-container">
+        <img src="{{ results.residuals_image_path }}" alt="Residuals Distribution Plot">
+    </div>
+    <p><em>Residuals clustered around zero indicate a good model fit.</em></p>
+    {% endif %}
+
+    <!-- Feature Importance -->
+    {% if results.feature_importance %}
+    <h3>Feature Importance - {{ results.best_model }}</h3>
+    <div class="importance-bar-container">
+        {% for feature, importance in results.feature_importance %}
+        <div class="importance-bar">
+            <div class="importance-label">{{ feature }}</div>
+            <div class="importance-bar-bg">
+                <div class="importance-bar-fill" style="width: {{ importance|add:0 }}%;"></div>
+            </div>
+            <div class="importance-value">{{ importance|floatformat:3 }}</div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+    {% endif %}
+
+    <div style="margin-top: 25px;">
+        <a href="{% url 'predict' %}">
+            <button class="btn-next">Go to Prediction</button>
+        </a>
+        <a href="{% url 'generate_report' %}">
+            <button class="btn-next" style="background: #6c757d;">Skip to Report</button>
+        </a>
+    </div>
+</div>
+{% endif %}
+
+</body>
+</html>
+

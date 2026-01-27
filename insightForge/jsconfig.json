@@ -1,0 +1,13 @@
+{
+    "compilerOptions": {
+        "checkJs": false,
+        "resolveJsonModule": true
+    },
+    "exclude": [
+        "**/templates/**",
+        "node_modules",
+        "venv",
+        "**/migrations/**"
+    ]
+}
+

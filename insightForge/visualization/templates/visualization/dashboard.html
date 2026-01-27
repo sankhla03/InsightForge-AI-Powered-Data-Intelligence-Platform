@@ -1,0 +1,189 @@
+<h2>📊 Visualization Dashboard</h2>
+
+<style>
+.btn {
+    padding: 12px 24px;
+    border: none;
+    cursor: pointer;
+    border-radius: 4px;
+    color: white;
+    font-size: 14px;
+}
+.btn-nav {
+    background: #007bff;
+    text-decoration: none;
+    display: inline-block;
+}
+.btn-nav:hover {
+    background: #0056b3;
+}
+</style>
+
+<!-- Force fresh page load by preventing bfcache -->
+<head>
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+</head>
+
+<script>
+// Force hard reload on page load to get fresh data
+(function() {
+    // Check if page was loaded from bfcache
+    if (window.performance && window.performance.navigation.type === 2) {
+        // Force reload from server
+        window.location.reload(true);
+    }
+})();
+
+// Add cache-busting parameter to form submission
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.querySelector('form');
+    if (form) {
+        form.addEventListener('submit', function() {
+            // Add timestamp to ensure fresh response
+            const timestamp = new Date().getTime();
+            // Create or update hidden field
+            let tsField = form.querySelector('input[name="_ts"]');
+            if (!tsField) {
+                tsField = document.createElement('input');
+                tsField.type = 'hidden';
+                tsField.name = '_ts';
+                form.appendChild(tsField);
+            }
+            tsField.value = timestamp;
+        });
+    }
+});
+</script>
+
+<form method="post">
+    {% csrf_token %}
+    
+    <!-- Cache-busting hidden field -->
+    <input type="hidden" name="_cb" value="{{ timestamp }}" />
+
+    <!-- Chart Type -->
+    <label>Chart Type:</label>
+    <select name="chart_type" id="chartType" onchange="updateFields()" required>
+        <option value="">-- Select Chart --</option>
+        <option value="histogram">Histogram</option>
+        <option value="boxplot">Boxplot</option>
+        <option value="scatter">Scatter Plot</option>
+        <option value="pie">Pie Chart</option>
+        <option value="correlation">Correlation Heatmap</option>
+        <option value="pairplot">Pairplot</option>
+    </select>
+
+    <br><br>
+
+    <!-- Column 1 -->
+    <div id="col1Div" style="display:none;">
+        <label>Column 1:</label>
+        <select name="column1" id="column1Select">
+            {% for col in all_cols %}
+            <option value="{{ col }}" {% if col == saved_column1 %}selected{% endif %}>{{ col }}</option>
+            {% endfor %}
+        </select>
+        <br><br>
+    </div>
+
+    <!-- Column 2 -->
+    <div id="col2Div" style="display:none;">
+        <label>Column 2:</label>
+        <select name="column2" id="column2Select">
+            {% for col in numeric_cols %}
+            <option value="{{ col }}" {% if col == saved_column2 %}selected{% endif %}>{{ col }}</option>
+            {% endfor %}
+        </select>
+        <br><br>
+    </div>
+
+    <!-- Hue -->
+    <div id="hueDiv" style="display:none;">
+        <label>Hue (optional):</label>
+        <select name="hue">
+            <option value="">None</option>
+            {% for col in all_cols %}
+            <option value="{{ col }}" {% if col == saved_hue %}selected{% endif %}>{{ col }}</option>
+            {% endfor %}
+        </select>
+        <br><br>
+    </div>
+
+    <button type="submit">Generate Chart</button>
+</form>
+
+<hr>
+
+{% if plot %}
+    {{ plot|safe }}
+{% endif %}
+
+<!-- Navigation -->
+<div style="margin-top: 20px;">
+    <a href="{% url 'feature_selection' %}">
+        <button type="button" class="btn btn-nav">➡ Continue to Feature Selection</button>
+    </a>
+</div>
+
+<!-- ✅ JavaScript Logic -->
+<script>
+// Cache-busting: force fresh load on back/forward navigation
+window.addEventListener('pageshow', function(event) {
+    if (event.persisted || window.performance && window.performance.navigation.type === 2) {
+        // Page was loaded from back/forward cache, force reload
+        window.location.reload();
+    }
+});
+
+function updateFields() {
+    const chart = document.getElementById("chartType").value;
+
+    document.getElementById("col1Div").style.display = "none";
+    document.getElementById("col2Div").style.display = "none";
+    document.getElementById("hueDiv").style.display = "none";
+
+    if (chart === "histogram" || chart === "boxplot") {
+        document.getElementById("col1Div").style.display = "block";
+    }
+
+    if (chart === "scatter") {
+        document.getElementById("col1Div").style.display = "block";
+        document.getElementById("col2Div").style.display = "block";
+        document.getElementById("hueDiv").style.display = "block";
+    }
+
+    if (chart === "pie") {
+        document.getElementById("col1Div").style.display = "block";
+    }
+
+    if (chart === "pairplot") {
+        document.getElementById("hueDiv").style.display = "block";
+    }
+}
+
+// Initialize fields on page load based on saved selections
+document.addEventListener('DOMContentLoaded', function() {
+    updateFields();
+    
+    // If saved_column1 exists and is valid, select it
+    const col1Select = document.getElementById('column1Select');
+    const col2Select = document.getElementById('column2Select');
+    
+    // Validate saved selections are still valid options
+    if (col1Select && '{{ saved_column1 }}') {
+        const validOption = Array.from(col1Select.options).some(opt => opt.value === '{{ saved_column1 }}');
+        if (!validOption && col1Select.options.length > 0) {
+            col1Select.selectedIndex = 0;
+        }
+    }
+    
+    if (col2Select && '{{ saved_column2 }}') {
+        const validOption = Array.from(col2Select.options).some(opt => opt.value === '{{ saved_column2 }}');
+        if (!validOption && col2Select.options.length > 0) {
+            col2Select.selectedIndex = 0;
+        }
+    }
+});
+</script>

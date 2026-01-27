@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Clean Dataset</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 30px;
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin-top: 20px;
+        }
+        .card {
+            border: 1px solid #ccc;
+            padding: 15px;
+            background: #f9f9f9;
+        }
+        table {
+            margin-top: 20px;
+            border-collapse: collapse;
+            width: 100%;
+        }
+        th, td {
+            padding: 6px;
+            border: 1px solid #ccc;
+            text-align: left;
+        }
+        .actions {
+            margin-top: 25px;
+        }
+        button {
+            padding: 10px 18px;
+            margin-right: 10px;
+            cursor: pointer;
+        }
+        .scrollable-table {
+            max-height: 500px;
+            overflow-y: auto;
+            overflow-x: auto;
+            margin-top: 20px;
+            border: 1px solid #ccc;
+        }
+        .scrollable-table table {
+            margin-top: 0;
+        }
+        .full-data-section {
+            margin-top: 30px;
+        }
+        .toggle-btn {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 18px;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+        .toggle-btn:hover {
+            background: #45a049;
+        }
+    </style>
+</head>
+<body>
+
+<h2>🧹 Dataset Cleaning Summary</h2>
+
+<div class="stats">
+    <div class="card">
+        <b>Original Rows</b><br>
+        {{ original_rows }}
+    </div>
+
+    <div class="card">
+        <b>Duplicate Rows Removed</b><br>
+        {{ duplicate_rows }}
+    </div>
+
+    <div class="card">
+        <b>Final Rows</b><br>
+        {{ cleaned_rows }}
+    </div>
+
+    <div class="card">
+        <b>Total Columns</b><br>
+        {{ columns }}
+    </div>
+
+    <div class="card">
+        <b>Missing Values (Before)</b><br>
+        {{ missing_before }}
+    </div>
+
+    <div class="card">
+        <b>Missing Values Handled</b><br>
+        {{ missing_handled }}
+    </div>
+</div>
+
+<div class="full-data-section">
+    <button class="toggle-btn" onclick="toggleFullData()">
+        👁️ Show/Hide Full Dataset (Scrollable)
+    </button>
+    <div id="fullDataContainer" class="scrollable-table" style="display: none;">
+        <table id="fullDataTable">
+            <thead id="fullDataHead"></thead>
+            <tbody id="fullDataBody"></tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    var fullData = {{ full_data_json|safe }};
+
+    function toggleFullData() {
+        var container = document.getElementById('fullDataContainer');
+        if (container.style.display === 'none') {
+            container.style.display = 'block';
+            renderFullData();
+        } else {
+            container.style.display = 'none';
+        }
+    }
+
+    function renderFullData() {
+        var thead = document.getElementById('fullDataHead');
+        var tbody = document.getElementById('fullDataBody');
+
+        if (!fullData || fullData.length === 0) {
+            thead.innerHTML = '<tr><th>No data available</th></tr>';
+            tbody.innerHTML = '';
+            return;
+        }
+
+        // Get column names from first row
+        var columns = Object.keys(fullData[0]);
+
+        // Build header
+        var headerHtml = '<tr>';
+        for (var i = 0; i < columns.length; i++) {
+            headerHtml += '<th>' + escapeHtml(columns[i]) + '</th>';
+        }
+        headerHtml += '</tr>';
+        thead.innerHTML = headerHtml;
+
+        // Build body
+        var bodyHtml = '';
+        for (var j = 0; j < fullData.length; j++) {
+            bodyHtml += '<tr>';
+            for (var k = 0; k < columns.length; k++) {
+                var val = fullData[j][columns[k]];
+                if (val === null || val === undefined) {
+                    val = '';
+                }
+                bodyHtml += '<td>' + escapeHtml(String(val)) + '</td>';
+            }
+            bodyHtml += '</tr>';
+        }
+        tbody.innerHTML = bodyHtml;
+    }
+
+    function escapeHtml(text) {
+        var div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+</script>
+
+<div class="actions">
+    <a href="{% url 'download_cleaned_dataset' %}">
+        <button>⬇️ Download Cleaned Dataset</button>
+    </a>
+
+    <a href="{% url 'outlier_detection' %}">
+        <button>➡ Continue to Outlier Detection</button>
+    </a>
+</div>
+
+</body>
+</html>

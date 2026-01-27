@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Label Noise Detection</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 30px;
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin-top: 20px;
+            margin-bottom: 20px;
+        }
+        .card {
+            border: 1px solid #ccc;
+            padding: 15px;
+            background: #f9f9f9;
+        }
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+        table {
+            margin-top: 20px;
+            border-collapse: collapse;
+            width: 100%;
+        }
+        th, td {
+            padding: 8px;
+            border: 1px solid #ccc;
+            text-align: left;
+        }
+        .editable-table input {
+            width: 100%;
+            border: 1px solid #ccc;
+            background: transparent;
+            padding: 6px;
+            border-radius: 4px;
+        }
+        .editable-table input:focus {
+            background: #fff;
+            outline: 2px solid #5a6268;
+        }
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            cursor: pointer;
+            border-radius: 4px;
+            color: white;
+            font-size: 14px;
+            margin-right: 10px;
+            margin-top: 10px;
+        }
+        .btn-auto {
+            background: #007bff;
+        }
+        .btn-auto:hover {
+            background: #0056b3;
+        }
+        .btn-save {
+            background: #28a745;
+        }
+        .btn-save:hover {
+            background: #218838;
+        }
+        .btn-remove {
+            background: #dc3545;
+        }
+        .btn-remove:hover {
+            background: #c82333;
+        }
+        .btn-nav {
+            background: #5a6268;
+            text-decoration: none;
+            display: inline-block;
+        }
+        .btn-nav:hover {
+            background: #4a5258;
+        }
+        .action-bar {
+            margin-top: 25px;
+            padding: 20px;
+            background: #e9ecef;
+            border-radius: 8px;
+        }
+        .table-container {
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #ccc;
+        }
+        .action-buttons {
+            margin-top: 20px;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .info-box {
+            padding: 15px;
+            background: #e7f3ff;
+            border: 1px solid #b8daff;
+            border-radius: 4px;
+            margin-bottom: 15px;
+        }
+    </style>
+</head>
+<body>
+
+<h2>🏷️ Label Noise Detection</h2>
+
+<!-- NOISE DATA SECTION -->
+<div class="section" style="background: {% if noise_report %}#fff3cd{% else %}#d4edda{% endif %}; border: 1px solid {% if noise_report %}#ffc107{% else %}#28a745{% endif %};">
+    <h3 style="color: {% if noise_report %}#856404{% else %}#155724{% endif %};">
+        {% if noise_report %}
+        ⚠️ Detected Noise Samples ({{ noisy_count }})
+        {% else %}
+        ✅ No Noise Detected
+        {% endif %}
+    </h3>
+    
+    {% if noise_report %}
+    <div class="stats">
+        <div class="card">
+            <b>Total Rows</b><br>
+            {{ noise_report.total_rows }}
+        </div>
+        <div class="card">
+            <b>Noisy Rows</b><br>
+            {{ noise_report.noisy_rows }}
+        </div>
+        <div class="card">
+            <b>Noise Percentage</b><br>
+            {{ noise_report.noise_percent }}%
+        </div>
+    </div>
+    
+    <div class="action-buttons">
+        <!-- Auto-handle noise button -->
+        <form method="post" style="display: inline;">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="auto_handle">
+            <button type="submit" class="btn btn-auto" onclick="return confirm('Auto-handle will automatically remove all noisy rows and continue to next step. Continue?');">
+                🤖 Auto-handle Noise
+            </button>
+        </form>
+        
+        <button class="btn btn-save" onclick="toggleManualEdit()">
+            ✏️ Manually Review & Edit
+        </button>
+    </div>
+    
+    <div id="manualEditSection" style="display: none; margin-top: 20px;">
+        <p class="info-box" style="background: #fff3cd; border-color: #ffc107;">
+            Manually review and edit noisy samples below. Edit cell values or mark rows for removal.
+        </p>
+        
+        <div class="table-container">
+            <table id="noiseTable" class="editable-table">
+                <thead>
+                    <tr style="background: #856404; color: white;">
+                        <th style="padding: 10px; border: 1px solid #ccc;">#</th>
+                        {% for col in columns %}
+                        <th style="padding: 10px; border: 1px solid #ccc;">{{ col }}</th>
+                        {% endfor %}
+                        <th style="padding: 10px; border: 1px solid #ccc;">Action</th>
+                    </tr>
+                </thead>
+                <tbody id="noiseBody">
+                </tbody>
+            </table>
+        </div>
+        
+        <form method="post" id="noiseForm" style="margin-top: 20px;">
+            {% csrf_token %}
+            <input type="hidden" name="noise_data" id="noiseData">
+            <input type="hidden" name="deleted_indices" id="deletedIndices">
+            <input type="hidden" name="action" id="formAction">
+            
+            <button type="button" class="btn btn-save" onclick="saveData('manual_save')">
+                💾 Save Edits
+            </button>
+            
+            <button type="button" class="btn btn-remove" onclick="saveData('manual_remove')">
+                🗑️ Remove Marked
+            </button>
+        </form>
+    </div>
+    
+    {% else %}
+    <p style="color: #155724; margin: 15px 0;">
+        No noise samples detected in your dataset using ML detection.
+    </p>
+    {% endif %}
+</div>
+
+<!-- NAVIGATION -->
+<div class="action-bar">
+    <a href="{% url 'visualization_dashboard' %}">
+        <button class="btn btn-nav">➡ Continue to Visualization</button>
+    </a>
+    <a href="{% url 'outlier_detection' %}">
+        <button class="btn btn-nav" style="background: #6c757d;">← Back to Outliers</button>
+    </a>
+</div>
+
+{% if noise_report %}
+<script>
+    var tableData = {{ noise_data_json|safe }};
+    var columns = {{ columns|safe }};
+    var deletedRows = [];
+    var manualEditVisible = false;
+    
+    function toggleManualEdit() {
+        manualEditVisible = !manualEditVisible;
+        document.getElementById('manualEditSection').style.display = manualEditVisible ? 'block' : 'none';
+        if (manualEditVisible) {
+            renderTable();
+        }
+    }
+    
+    function renderTable() {
+        var tbody = document.getElementById('noiseBody');
+        
+        if (!tableData || tableData.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="' + (columns.length + 2) + '" style="text-align: center; padding: 30px;">No data</td></tr>';
+            return;
+        }
+        
+        var bodyHtml = '';
+        
+        for (var j = 0; j < tableData.length; j++) {
+            var isDeleted = deletedRows.indexOf(j) !== -1;
+            bodyHtml += '<tr' + (isDeleted ? ' style="opacity: 0.5; text-decoration: line-through; background: #ffe6e6;"' : '') + '>';
+            bodyHtml += '<td style="padding: 8px; border: 1px solid #ccc; text-align: center; font-weight: bold;">' + (j + 1) + '</td>';
+            
+            for (var k = 0; k < columns.length; k++) {
+                var val = tableData[j][columns[k]];
+                if (val === null || val === undefined) {
+                    val = '';
+                }
+                bodyHtml += '<td style="padding: 4px; border: 1px solid #ccc;">';
+                bodyHtml += '<input type="text" id="input-' + j + '-' + k + '" value="' + escapeHtml(String(val)) + '" data-row="' + j + '" data-col="' + columns[k] + '" onchange="updateData(this)"' + (isDeleted ? ' disabled' : '') + '>';
+                bodyHtml += '</td>';
+            }
+            
+            bodyHtml += '<td style="padding: 8px; border: 1px solid #ccc; text-align: center;">';
+            if (!isDeleted) {
+                bodyHtml += '<button type="button" onclick="deleteRow(' + j + ')" style="background: #dc3545; color: white; padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer;">Delete</button>';
+            } else {
+                bodyHtml += '<span style="color: #dc3545; font-weight: bold;">Deleted</span>';
+            }
+            bodyHtml += '</td>';
+            bodyHtml += '</tr>';
+        }
+        
+        tbody.innerHTML = bodyHtml;
+    }
+    
+    function updateData(input) {
+        var row = parseInt(input.getAttribute('data-row'));
+        var col = input.getAttribute('data-col');
+        var val = input.value;
+        if (!isNaN(val) && val !== '') {
+            val = parseFloat(val);
+        }
+        tableData[row][col] = val;
+    }
+    
+    function deleteRow(idx) {
+        if (confirm('Mark this row for deletion?')) {
+            deletedRows.push(idx);
+            renderTable();
+        }
+    }
+    
+    function saveData(action) {
+        var editedData = [];
+        
+        for (var idx = 0; idx < tableData.length; idx++) {
+            if (deletedRows.indexOf(idx) !== -1) continue;
+            
+            var row = {};
+            for (var c = 0; c < columns.length; c++) {
+                var input = document.getElementById('input-' + idx + '-' + c);
+                if (input) {
+                    var val = input.value;
+                    if (!isNaN(val) && val !== '') {
+                        val = parseFloat(val);
+                    }
+                    row[columns[c]] = val;
+                }
+            }
+            editedData.push(row);
+        }
+        
+        document.getElementById('noiseData').value = JSON.stringify(editedData);
+        document.getElementById('deletedIndices').value = JSON.stringify(deletedRows);
+        document.getElementById('formAction').value = action;
+        document.getElementById('noiseForm').submit();
+    }
+    
+    function escapeHtml(text) {
+        var div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+</script>
+{% endif %}
+
+</body>
+</html>
+

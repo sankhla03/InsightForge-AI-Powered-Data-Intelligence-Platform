@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>InsightForge – Upload Dataset</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .nav-links { margin: 20px 0; padding: 15px; background: #f0f0f0; border-radius: 5px; }
+        .nav-links a { margin-right: 15px; padding: 8px 15px; background: #5a6268; color: white; text-decoration: none; border-radius: 4px; }
+        .nav-links a:hover { background: #4a545c; }
+        table { border-collapse: collapse; width: 100%; margin-top: 15px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #5a6268; color: white; }
+        .table-container { max-height: 400px; overflow-y: auto; margin-top: 15px; border: 1px solid #ddd; }
+    </style>
+</head>
+<body>
+
+<h1>Upload Dataset</h1>
+
+<form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    <input type="file" name="dataset" required>
+    <button type="submit" style="background: #5a6268; color: white; padding: 10px 20px; border: none; cursor: pointer; border-radius: 4px;">Upload</button>
+</form>
+
+{% if error %}
+    <p style="color:red">{{ error }}</p>
+{% endif %}
+
+{% if preview %}
+    <h3>Dataset Info</h3>
+    <p>Rows: {{ rows }} | Columns: {{ cols }}</p>
+    <h3>Preview</h3>
+    <div class="table-container">
+        {{ preview|safe }}
+    </div>
+    
+    <div class="nav-links">
+        <h3>Next Steps</h3>
+        <a href="/preprocessing/clean/">
+            <button style="background: #5a6268; padding: 10px 20px; color: white; border: none; cursor: pointer; border-radius: 4px;">➡ Continue to cleaning</button>
+        </a>
+    </div>
+{% endif %}
+
+</body>
+</html>

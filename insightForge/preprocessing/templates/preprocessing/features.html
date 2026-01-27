@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Feature Selection</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 30px;
+        }
+        .card {
+            border: 1px solid #ccc;
+            padding: 15px;
+            background: #f9f9f9;
+            margin-bottom: 15px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        select, input[type="number"] {
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            width: 100%;
+            max-width: 300px;
+        }
+        button {
+            padding: 10px 18px;
+            cursor: pointer;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            margin-right: 10px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        table {
+            margin-top: 20px;
+            border-collapse: collapse;
+            width: 100%;
+        }
+        th, td {
+            padding: 8px;
+            border: 1px solid #ccc;
+            text-align: left;
+        }
+        th {
+            background: #f0f0f0;
+        }
+        .score-positive {
+            color: #28a745;
+            font-weight: bold;
+        }
+        .score-negative {
+            color: #dc3545;
+            font-weight: bold;
+        }
+        .score-neutral {
+            color: #666;
+        }
+        .scrollable-table {
+            max-height: 400px;
+            overflow-y: auto;
+            overflow-x: auto;
+            margin-top: 20px;
+            border: 1px solid #ccc;
+        }
+        .method-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+        .method-card {
+            border: 2px solid #ddd;
+            padding: 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-align: center;
+        }
+        .method-card:hover {
+            border-color: #007bff;
+            background: #f8f9fa;
+        }
+        .method-card.selected {
+            border-color: #007bff;
+            background: #e7f1ff;
+        }
+        .method-card h3 {
+            margin: 0 0 10px 0;
+            color: #333;
+        }
+        .method-card p {
+            margin: 0;
+            color: #666;
+            font-size: 14px;
+        }
+        .preview-section {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f0f8ff;
+            border-radius: 8px;
+        }
+        .score-bar-container {
+            width: 100%;
+            background: #e0e0e0;
+            height: 20px;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        .score-bar {
+            height: 100%;
+            transition: width 0.3s;
+        }
+        .actions {
+            margin-top: 25px;
+            padding-top: 20px;
+            border-top: 1px solid #ddd;
+        }
+    </style>
+</head>
+<body>
+
+<h2>Feature Selection</h2>
+
+{% if messages %}
+<div style="margin-bottom: 20px;">
+{% for message in messages %}
+<div style="padding: 15px; margin-bottom: 10px; border-radius: 4px; 
+    {% if message.tags == 'error' %}background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb;{% endif %}
+    {% if message.tags == 'success' %}background: #d4edda; color: #155724; border: 1px solid #c3e6cb;{% endif %}
+    {% if message.tags == 'info' %}background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb;{% endif %}">
+    {{ message }}
+</div>
+{% endfor %}
+</div>
+{% endif %}
+
+{% if not selected %}
+<div class="card">
+    <h3>Step 1: Select Target Column</h3>
+    <p style="color: #666;">Choose the target variable (the column you want to predict)</p>
+    
+    <form method="post" onsubmit="return validateForm()">
+        {% csrf_token %}
+        
+        <div class="form-group">
+            <label for="target">Target Column:</label>
+            <select name="target" id="target" required onchange="updateTargetDisplay()">
+                {% for col in columns %}
+                <option value="{{ col }}" {% if col == target %}selected{% endif %}>{{ col }}</option>
+                {% endfor %}
+            </select>
+            <p style="color: #dc3545; font-size: 13px; margin-top: 5px;">
+                The target column will NEVER be encoded or modified.
+            </p>
+        </div>
+
+        <div class="form-group" style="background: #e7f1ff; padding: 15px; border-radius: 8px; border: 1px solid #b6d4fe;">
+            <label style="font-weight: bold; color: #0c5460; margin-bottom: 10px; display: block;">
+                Convert Categorical Features to Numeric
+            </label>
+            <button type="button" id="convertFeaturesBtn" onclick="convertFeatures()" style="padding: 12px 24px; cursor: pointer; background: #28a745; color: white; border: none; border-radius: 4px; font-size: 14px; font-weight: bold;">
+                Convert Features to Numeric
+            </button>
+            <input type="hidden" name="convert_features" id="convertFeaturesInput" value="">
+            <div id="convertMessage" style="margin-top: 15px; padding: 12px; border-radius: 4px; display: none;">
+                <strong>Features will be converted to numeric values using OrdinalEncoder</strong><br>
+                All categorical columns will be replaced with numbers. Target column will NOT be encoded.
+                <div style="margin-top: 15px;">
+                    <button type="button" id="showDataBtn" onclick="showData()" style="padding: 10px 20px; cursor: pointer; background: #17a2b8; color: white; border: none; border-radius: 4px; font-size: 14px;">
+                        Show Data
+                    </button>
+                </div>
+                <div id="dataContainer" style="display: none; margin-top: 15px;">
+                    <div style="background: #fff; padding: 15px; border-radius: 4px; border: 1px solid #28a745;">
+                        <h4 style="margin: 0 0 10px 0; color: #155724;">Encoded Dataset</h4>
+                        <p style="color: #666; margin-bottom: 15px;">All categorical columns have been converted to numeric values. Target column is NOT encoded.</p>
+                        <div id="encodedDataLoading" style="padding: 20px; text-align: center; color: #666;">
+                            Loading encoded data...
+                        </div>
+                        <div id="encodedDataContent" style="display: none;">
+                            <div id="encodingInfo" style="background: #e7f1ff; padding: 10px; border-radius: 4px; margin-bottom: 15px;"></div>
+                            <div class="scrollable-table" style="max-height: 400px; overflow: auto;">
+                                <div id="encodedTableContainer"></div>
+                            </div>
+                        </div>
+                        <div id="encodedDataError" style="display: none; padding: 15px; background: #f8d7da; color: #721c24; border-radius: 4px;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <h3>Step 2: Choose Feature Selection Method</h3>
+        <p style="color: #666;">Select a method to rank and select the most important features</p>
+        
+        <input type="hidden" name="selected_target" id="selectedTarget" value="{{ target }}">
+        
+        <div class="method-cards">
+            <div class="method-card" onclick="selectMethod('correlation', this)">
+                <h3>Correlation</h3>
+                <p>Ranks features by their correlation with the target variable</p>
+            </div>
+            
+            <div class="method-card" onclick="selectMethod('kbest', this)">
+                <h3>K-Best</h3>
+                <p>Uses F-test to select the top K features</p>
+            </div>
+            
+            <div class="method-card" onclick="selectMethod('rfe', this)">
+                <h3>RFE</h3>
+                <p>Recursive Feature Elimination with Random Forest</p>
+            </div>
+            
+            <div class="method-card" onclick="selectMethod('tree', this)">
+                <h3>Tree-Based</h3>
+                <p>Feature importance from Random Forest classifier</p>
+            </div>
+            
+            <div class="method-card" onclick="selectMethod('none', this)">
+                <h3>No Selection</h3>
+                <p>Use all features (skip feature selection)</p>
+            </div>
+        </div>
+        
+        <input type="hidden" name="method" id="selectedMethod" value="">
+        
+        <button type="submit" id="submitBtn">Run Feature Selection</button>
+    </form>
+</div>
+
+<script>
+    function selectMethod(method, element) {
+        document.querySelectorAll('.method-card').forEach(card => {
+            card.classList.remove('selected');
+        });
+        
+        element.classList.add('selected');
+        document.getElementById('selectedMethod').value = method;
+        document.getElementById('selectedMethod').dataset.selected = "true";
+    }
+    
+    function updateTargetDisplay() {
+        var targetSelect = document.getElementById('target');
+        document.getElementById('selectedTarget').value = targetSelect.value;
+    }
+    
+    function validateForm() {
+        // Always update selectedTarget with current dropdown value before submission
+        var targetSelect = document.getElementById('target');
+        document.getElementById('selectedTarget').value = targetSelect.value;
+        
+        var method = document.getElementById('selectedMethod').value;
+        if (!method) {
+            alert('Please click on one of the method cards to select a feature selection method.');
+            return false;
+        }
+        return true;
+    }
+    
+    function convertFeatures() {
+        document.getElementById('convertFeaturesInput').value = 'true';
+        
+        var messageDiv = document.getElementById('convertMessage');
+        messageDiv.style.display = 'block';
+        messageDiv.style.background = '#d4edda';
+        messageDiv.style.color = '#155724';
+        messageDiv.style.border = '1px solid #c3e6cb';
+        
+        var btn = document.getElementById('convertFeaturesBtn');
+        btn.style.background = '#6c757d';
+        btn.innerHTML = 'Conversion Enabled';
+        btn.disabled = true;
+        
+        alert('Feature conversion enabled!\n\nAll categorical/object columns will be converted to numbers using OrdinalEncoder.\n\n- Object/categorical columns -> encoded to numbers (0, 1, 2, ...)\n- Binary (0/1) columns -> unchanged\n- Numeric columns -> unchanged\n- Target column -> NEVER encoded');
+    }
+    
+    function showData() {
+        var dataContainer = document.getElementById('dataContainer');
+        var showBtn = document.getElementById('showDataBtn');
+        
+        if (dataContainer.style.display === 'none') {
+            dataContainer.style.display = 'block';
+            showBtn.innerHTML = 'Hide Data';
+            showBtn.style.background = '#dc3545';
+            
+            // Fetch encoded data via AJAX
+            fetchEncodedData();
+        } else {
+            dataContainer.style.display = 'none';
+            showBtn.innerHTML = 'Show Data';
+            showBtn.style.background = '#17a2b8';
+        }
+    }
+    
+    function fetchEncodedData() {
+        var target = document.getElementById('target').value;
+        var loadingEl = document.getElementById('encodedDataLoading');
+        var contentEl = document.getElementById('encodedDataContent');
+        var errorEl = document.getElementById('encodedDataError');
+        var infoEl = document.getElementById('encodingInfo');
+        var tableContainer = document.getElementById('encodedTableContainer');
+        
+        // Show loading, hide content and error
+        loadingEl.style.display = 'block';
+        contentEl.style.display = 'none';
+        errorEl.style.display = 'none';
+        
+        // Send AJAX request to encode features and get data
+        var formData = new FormData();
+        formData.append('target', target);
+        formData.append('csrfmiddlewaretoken', getCookie('csrftoken'));
+        
+        fetch('/preprocessing/encode-features/', {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            loadingEl.style.display = 'none';
+            
+            if (data.success) {
+                // Show encoding info
+                var infoHtml = '<div style="background: #d4edda; padding: 12px; border-radius: 4px; margin-bottom: 15px; border: 1px solid #c3e6cb;">';
+                infoHtml += '<strong style="color: #155724;">✓ Dataset Encoded & Saved!</strong><br>';
+                infoHtml += '<span style="color: #155724; font-size: 13px;">' + data.message + '</span><br><br>';
+                infoHtml += '<strong style="color: #0c5460;">Encoding Details:</strong><br>';
+                if (data.encoding_info.encoded_columns && data.encoding_info.encoded_columns.length > 0) {
+                    infoHtml += '<span style="color: #155724;">→ Encoded columns: ' + data.encoding_info.encoded_columns.join(', ') + '</span><br>';
+                }
+                if (data.encoding_info.numeric_columns && data.encoding_info.numeric_columns.length > 0) {
+                    infoHtml += '<span style="color: #155724;">→ Numeric columns: ' + data.encoding_info.numeric_columns.join(', ') + '</span><br>';
+                }
+                if (data.encoding_info.binary_columns && data.encoding_info.binary_columns.length > 0) {
+                    infoHtml += '<span style="color: #155724;">→ Binary columns (unchanged): ' + data.encoding_info.binary_columns.join(', ') + '</span><br>';
+                }
+                infoHtml += '<span style="color: #155724;">→ Target column: ' + target + ' (NOT encoded)</span>';
+                infoHtml += '</div>';
+                infoEl.innerHTML = infoHtml;
+                
+                // Show the table
+                tableContainer.innerHTML = data.encoded_data_html;
+                contentEl.style.display = 'block';
+            } else {
+                errorEl.textContent = data.error || 'Error encoding features';
+                errorEl.style.display = 'block';
+            }
+        })
+        .catch(error => {
+            loadingEl.style.display = 'none';
+            errorEl.textContent = 'Error: ' + error.message;
+            errorEl.style.display = 'block';
+        });
+    }
+    
+    function getCookie(name) {
+        var cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            var cookies = document.cookie.split(';');
+            for (var i = 0; i < cookies.length; i++) {
+                var cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+</script>
+
+{% else %}
+<div class="card">
+    <h3>Feature Selection Results</h3>
+    <p><strong>Method:</strong> {{ method|upper }}</p>
+    <p><strong>Target Column:</strong> {{ target }}</p>
+    <p><strong>Features Selected:</strong> <span id="selectedCount">0</span> / {{ features_count }}</p>
+    
+    {% if encoding_info %}
+    <div id="encodingMessage" style="background: #d4edda; padding: 15px; border-radius: 8px; margin-top: 15px; border: 1px solid #c3e6cb;">
+        <h4 style="margin: 0 0 10px 0; color: #155724;">Features Converted to Numeric</h4>
+        <p style="margin: 5px 0;"><strong>Encoded Columns:</strong> 
+            {% if encoding_info.encoded_columns %}
+                {{ encoding_info.encoded_columns|join:", " }}
+            {% else %}
+                None (all features were already numeric)
+            {% endif %}
+        </p>
+        <p style="margin: 5px 0;"><strong>Binary Columns (unchanged):</strong> 
+            {% if encoding_info.binary_columns %}
+                {{ encoding_info.binary_columns|join:", " }}
+            {% else %}
+                None
+            {% endif %}
+        </p>
+        <p style="margin: 5px 0;"><strong>Target Column:</strong> {{ target }} (NOT encoded)</p>
+    </div>
+    {% endif %}
+    
+    <div style="margin-top: 20px;">
+        <button type="button" id="showEncodedDataBtn" onclick="showEncodedData()" style="padding: 10px 20px; cursor: pointer; background: #17a2b8; color: white; border: none; border-radius: 4px; font-size: 14px;">
+            Show Encoded Data
+        </button>
+    </div>
+    <div id="encodedDataContainer" style="display: none; margin-top: 15px;">
+        <div style="background: #fff; padding: 15px; border-radius: 4px; border: 1px solid #28a745;">
+            <h4 style="margin: 0 0 10px 0; color: #155724;">Encoded Dataset (All Values)</h4>
+            <div class="scrollable-table" style="max-height: 400px;">
+                {{ encoded_data_html|safe }}
+            </div>
+        </div>
+    </div>
+</div>
+
+        <div class="card">
+    <h3>Feature Scores / Importance</h3>
+    <p style="color: #666; margin-bottom: 15px;">Features are ranked by their importance scores.</p>
+    
+    <form method="post" id="featureForm">
+        {% csrf_token %}
+        <input type="hidden" name="selected_features" id="selectedFeaturesInput" value="">
+        <input type="hidden" name="selected_target" value="{{ target }}">
+        
+        <div class="scrollable-table">
+            <table id="featuresTable">
+                <thead>
+                    <tr>
+                        <th>Select</th>
+                        <th>Feature</th>
+                        <th>Score / Importance</th>
+                        <th>Score Bar</th>
+                    </tr>
+                </thead>
+                <tbody id="featuresBody">
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="form-group" style="margin: 20px 0;">
+            <label for="featureSlider">Select Top N Features (Highest Importance First): <span id="sliderValue">5</span></label>
+            <input type="range" id="featureSlider" min="1" max="{{ features_count }}" value="5" 
+                   style="width: 100%; max-width: 400px;" onchange="updateSliderSelection(this.value)">
+        </div>
+        
+        <div class="actions">
+            <button type="button" onclick="submitFeatureSelection()">Confirm Selection & Continue</button>
+            <a href="{% url 'feature_selection' %}">
+                <button type="button" style="background: #6c757d;">Re-run Selection</button>
+            </a>
+        </div>
+    </form>
+</div>
+
+<script>
+    function showEncodedData() {
+        var dataContainer = document.getElementById('encodedDataContainer');
+        var showBtn = document.getElementById('showEncodedDataBtn');
+        
+        if (dataContainer.style.display === 'none') {
+            dataContainer.style.display = 'block';
+            showBtn.innerHTML = 'Hide Encoded Data';
+            showBtn.style.background = '#dc3545';
+        } else {
+            dataContainer.style.display = 'none';
+            showBtn.innerHTML = 'Show Encoded Data';
+            showBtn.style.background = '#17a2b8';
+        }
+    }
+    
+    var featureScores = {{ feature_scores_json|safe }};
+    var sortedFeatures = {{ sorted_features_json|safe }};  // Pre-sorted by score (highest first)
+    var fullDataset = [];  // Will store the full dataset for preview
+    var selectedFeatures = [];  // Currently selected features
+    var targetColumn = '{{ target }}';  // Target column name
+    var defaultSliderValue = {{ k|default:5 }};  // Default K value from backend
+    
+    function getScoreClass(score, method) {
+        if (method === 'correlation') {
+            if (score > 0.3) return 'score-positive';
+            if (score < -0.3) return 'score-negative';
+            return 'score-neutral';
+        }
+        if (score > 0.5) return 'score-positive';
+        if (score > 0.2) return 'score-neutral';
+        return 'score-negative';
+    }
+    
+    function renderFeaturesTable() {
+        var tbody = document.getElementById('featuresBody');
+        var method = '{{ method }}';
+        
+        var maxScore = 0;
+        for (var feat in featureScores) {
+            var absScore = Math.abs(featureScores[feat]);
+            if (absScore > maxScore) maxScore = absScore;
+        }
+        if (maxScore === 0) maxScore = 1;
+        
+        // Features are already sorted by score (highest first) from backend
+        // No need to sort again - just use sortedFeatures directly
+        var html = '';
+        for (var i = 0; i < sortedFeatures.length; i++) {
+            var feat = sortedFeatures[i];
+            var score = featureScores[feat] || 0;
+            var scoreClass = getScoreClass(score, method);
+            
+            var barWidth = (Math.abs(score) / maxScore) * 100;
+            var barColor = score > 0 ? '#28a745' : (score < 0 ? '#dc3545' : '#6c757d');
+            
+            var scoreDisplay = score.toFixed(4);
+            if (method === 'rfe') {
+                scoreDisplay = 'Importance: ' + score.toFixed(4);
+            }
+            
+            // Default: select top-K features (highest scores first)
+            var isChecked = i < defaultSliderValue ? 'checked' : '';
+            
+            html += '<tr>';
+            html += '<td><input type="checkbox" name="selected" value="' + escapeHtml(feat) + '" class="feature-checkbox" ' + isChecked + ' onchange="updateSelectedCount(); updatePreviewTable();"></td>';
+            html += '<td>' + escapeHtml(feat) + '</td>';
+            html += '<td class="' + scoreClass + '">' + scoreDisplay + '</td>';
+            html += '<td>';
+            html += '<div class="score-bar-container">';
+            html += '<div class="score-bar" style="width: ' + barWidth + '%; background: ' + barColor + ';"></div>';
+            html += '</div>';
+            html += '</td>';
+            html += '</tr>';
+        }
+        tbody.innerHTML = html;
+        
+        // Update slider to default value
+        document.getElementById('featureSlider').value = defaultSliderValue;
+        document.getElementById('sliderValue').textContent = defaultSliderValue;
+        
+        updateSelectedCount();
+        updatePreviewTable();
+    }
+    
+    function updateSliderSelection(value) {
+        document.getElementById('sliderValue').textContent = value;
+        
+        // Select top-N features from the pre-sorted list (highest scores first)
+        var checkboxes = document.querySelectorAll('.feature-checkbox');
+        checkboxes.forEach(function(cb, index) {
+            // Index 0 = highest score, index 1 = second highest, etc.
+            cb.checked = index < value;
+        });
+        updateSelectedCount();
+        updatePreviewTable();
+    }
+    
+    function updateSelectedCount() {
+        var checkboxes = document.querySelectorAll('.feature-checkbox:checked');
+        document.getElementById('selectedCount').textContent = checkboxes.length;
+    }
+    
+    function updatePreviewTable() {
+        // Get currently selected features from checkboxes
+        var selectedCheckboxes = document.querySelectorAll('.feature-checkbox:checked');
+        selectedFeatures = Array.from(selectedCheckboxes).map(cb => cb.value);
+        
+        // Add target column to the selection
+        var previewColumns = [...selectedFeatures, targetColumn];
+        
+        if (fullDataset.length === 0) {
+            // Dataset not loaded yet, show loading or default message
+            return;
+        }
+        
+        // Generate preview HTML
+        var previewHtml = '<table class="table table-bordered"><thead><tr>';
+        
+        // Header row
+        previewColumns.forEach(function(col) {
+            previewHtml += '<th>' + escapeHtml(col) + '</th>';
+        });
+        previewHtml += '</tr></thead><tbody>';
+        
+        // Data rows (limit to first 100 rows for performance)
+        var displayRows = Math.min(fullDataset.length, 100);
+        for (var i = 0; i < displayRows; i++) {
+            var row = fullDataset[i];
+            previewHtml += '<tr>';
+            previewColumns.forEach(function(col) {
+                var value = row[col];
+                // Format the value
+                if (value === null || value === undefined) {
+                    previewHtml += '<td>-</td>';
+                } else if (typeof value === 'number') {
+                    // Round to 2 decimal places for display
+                    previewHtml += '<td>' + value.toFixed(2) + '</td>';
+                } else {
+                    previewHtml += '<td>' + escapeHtml(String(value)) + '</td>';
+                }
+            });
+            previewHtml += '</tr>';
+        }
+        
+        // Add row count info if dataset is larger
+        if (fullDataset.length > 100) {
+            previewHtml += '<tr><td colspan="' + previewColumns.length + '" style="text-align: center; color: #666; font-style: italic;">... and ' + (fullDataset.length - 100) + ' more rows</td></tr>';
+        }
+        
+        previewHtml += '</tbody></table>';
+        
+        // Update the preview container
+        var previewContainer = document.getElementById('previewTableContainer');
+        if (previewContainer) {
+            previewContainer.innerHTML = previewHtml;
+        }
+    }
+    
+    function fetchDatasetForPreview() {
+        // Fetch the encoded dataset for preview
+        var formData = new FormData();
+        formData.append('csrfmiddlewaretoken', getCookie('csrftoken'));
+        
+        fetch('/preprocessing/get-encoded-data/', {
+            method: 'GET',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.encoded_data_html) {
+                // Parse the HTML table to get data
+                var parser = new DOMParser();
+                var doc = parser.parseFromString(data.encoded_data_html, 'text/html');
+                var rows = doc.querySelectorAll('tbody tr');
+                
+                fullDataset = [];
+                rows.forEach(function(row) {
+                    var rowData = {};
+                    var headers = doc.querySelectorAll('thead th');
+                    headers.forEach(function(th, index) {
+                        var colName = th.textContent.trim();
+                        var cells = row.querySelectorAll('td');
+                        if (cells[index]) {
+                            var cellValue = cells[index].textContent.trim();
+                            // Try to convert to number
+                            var numValue = parseFloat(cellValue);
+                            rowData[colName] = isNaN(numValue) ? cellValue : numValue;
+                        }
+                    });
+                    fullDataset.push(rowData);
+                });
+                
+                // Update preview with current selection
+                updatePreviewTable();
+            }
+        })
+        .catch(error => {
+            console.log('Could not fetch encoded data for preview:', error);
+        });
+    }
+    
+    function getCookie(name) {
+        var cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            var cookies = document.cookie.split(';');
+            for (var i = 0; i < cookies.length; i++) {
+                var cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+    
+    function submitFeatureSelection() {
+        var selectedFeatures = [];
+        document.querySelectorAll('.feature-checkbox:checked').forEach(cb => {
+            selectedFeatures.push(cb.value);
+        });
+        
+        if (selectedFeatures.length === 0) {
+            alert('Please select at least one feature.');
+            return;
+        }
+        
+        document.getElementById('selectedFeaturesInput').value = JSON.stringify(selectedFeatures);
+        document.getElementById('featureForm').submit();
+    }
+    
+    function escapeHtml(text) {
+        var div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+    
+    document.addEventListener('DOMContentLoaded', function() {
+        renderFeaturesTable();
+        // Fetch the dataset for dynamic preview
+        fetchDatasetForPreview();
+    });
+</script>
+{% endif %}
+
+</body>
+</html>
+
