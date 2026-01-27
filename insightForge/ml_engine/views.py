@@ -754,4 +754,3 @@ def predict_view(request):
         "prediction_label": prediction_label,
         "is_classification": is_classification,
     })
-
