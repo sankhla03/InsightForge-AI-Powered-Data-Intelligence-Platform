@@ -1,0 +1,470 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Feature Selection{% endblock %}
+{% block page_title %}Feature Selection & Ranking{% endblock %}
+
+{% block extra_css %}
+<style>
+  .score-positive { color: var(--if-success); font-weight: 700; }
+  .score-negative { color: var(--if-danger); font-weight: 700; }
+  .score-neutral  { color: var(--if-text-muted); }
+
+  .method-card {
+    border: 1.5px solid var(--if-border);
+    border-radius: var(--if-radius-md);
+    padding: 16px;
+    cursor: pointer;
+    transition: var(--if-transition-fast);
+    text-align: center;
+    background: var(--if-surface);
+    outline: none;
+    user-select: none;
+  }
+  .method-card:hover {
+    border-color: var(--if-primary);
+    box-shadow: var(--if-shadow-sm);
+  }
+  .method-card:focus-visible {
+    border-color: var(--if-primary);
+    box-shadow: 0 0 0 3px var(--if-primary-glow);
+  }
+  .method-card.selected {
+    border-color: var(--if-primary);
+    background: var(--if-primary-light);
+    box-shadow: inset 0 0 0 1.5px var(--if-primary);
+  }
+
+  .score-bar-bg {
+    width: 100%;
+    background: var(--if-surface-3);
+    height: 14px;
+    border-radius: 99px;
+    overflow: hidden;
+    position: relative;
+  }
+  .score-bar-fill {
+    height: 100%;
+    border-radius: 99px;
+    transition: width 0.3s ease;
+  }
+
+  .feature-checkbox {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    accent-color: var(--if-primary);
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="if-page-header">
+  <div class="if-flex-between">
+    <div>
+      <h1 class="if-section-title">Feature Selection</h1>
+      <p class="if-section-sub">Calculate feature relevance scores and manually pick predictor variables for model training.</p>
+    </div>
+    <a href="{% url 'scale_features' %}" class="if-btn if-btn-ghost">
+      <span>Skip Feature Selection →</span>
+    </a>
+  </div>
+</div>
+
+{% if error %}
+<div class="if-alert if-alert-danger" style="margin-bottom: 24px;">
+  <i data-lucide="alert-circle" class="if-alert-icon"></i>
+  <div class="if-alert-content">
+    <div class="if-alert-title">Calculation Error</div>
+    <div class="if-alert-body">{{ error }}</div>
+  </div>
+</div>
+{% endif %}
+
+<!-- Step 1: Select Target & Scoring Method Form -->
+<div class="if-card" style="margin-bottom: 24px;">
+  <div class="if-card-header">
+    <i data-lucide="sliders" class="if-icon-lg" style="color: var(--if-primary);"></i>
+    <h2 class="if-card-title">1. Target Variable & Scoring Method</h2>
+  </div>
+  <div class="if-card-body">
+    <form method="post" id="selectionConfigForm" onsubmit="showLoadingState();">
+      {% csrf_token %}
+
+      <div class="if-form-group" style="margin-bottom: 20px;">
+        <label class="if-form-label if-form-label-req" for="target">Target Variable</label>
+        <select name="target" id="target" class="if-select" required style="max-width: 400px;">
+          <option value="">-- Select Target Column --</option>
+          {% for col in columns %}
+            <option value="{{ col }}" {% if col == target %}selected{% endif %}>{{ col }}</option>
+          {% endfor %}
+        </select>
+        <div class="if-form-hint">The target variable will be automatically excluded from the feature selection list.</div>
+      </div>
+
+      <div class="if-form-group">
+        <label class="if-form-label" style="margin-bottom: 10px;">Scoring Method</label>
+        <input type="hidden" name="method" id="selectedMethod" value="{{ method|default:'correlation' }}">
+        
+        <div class="if-grid-4" role="radiogroup" aria-label="Scoring Method">
+          <div class="method-card {% if method == 'correlation' or not method %}selected{% endif %}"
+               onclick="selectMethod('correlation', this)"
+               onkeydown="handleMethodKey(event, 'correlation', this)"
+               tabindex="0" role="radio" aria-checked="{% if method == 'correlation' or not method %}true{% else %}false{% endif %}">
+            <i data-lucide="activity" class="if-icon-lg" style="margin-bottom: 8px; color: var(--if-primary);"></i>
+            <div style="font-weight: 700; color: var(--if-text);">Correlation</div>
+            <div style="font-size: 11px; color: var(--if-text-muted); margin-top: 4px;">Linear & monotonic association</div>
+          </div>
+
+          <div class="method-card {% if method == 'kbest' %}selected{% endif %}"
+               onclick="selectMethod('kbest', this)"
+               onkeydown="handleMethodKey(event, 'kbest', this)"
+               tabindex="0" role="radio" aria-checked="{% if method == 'kbest' %}true{% else %}false{% endif %}">
+            <i data-lucide="bar-chart-2" class="if-icon-lg" style="margin-bottom: 8px; color: var(--if-primary);"></i>
+            <div style="font-weight: 700; color: var(--if-text);">SelectKBest (ANOVA)</div>
+            <div style="font-size: 11px; color: var(--if-text-muted); margin-top: 4px;">Statistical F-score significance</div>
+          </div>
+
+          <div class="method-card {% if method == 'rfe' %}selected{% endif %}"
+               onclick="selectMethod('rfe', this)"
+               onkeydown="handleMethodKey(event, 'rfe', this)"
+               tabindex="0" role="radio" aria-checked="{% if method == 'rfe' %}true{% else %}false{% endif %}">
+            <i data-lucide="list-tree" class="if-icon-lg" style="margin-bottom: 8px; color: var(--if-primary);"></i>
+            <div style="font-weight: 700; color: var(--if-text);">Recursive Elimination</div>
+            <div style="font-size: 11px; color: var(--if-text-muted); margin-top: 4px;">Iterative model-based ranking</div>
+          </div>
+
+          <div class="method-card {% if method == 'tree' %}selected{% endif %}"
+               onclick="selectMethod('tree', this)"
+               onkeydown="handleMethodKey(event, 'tree', this)"
+               tabindex="0" role="radio" aria-checked="{% if method == 'tree' %}true{% else %}false{% endif %}">
+            <i data-lucide="git-branch" class="if-icon-lg" style="margin-bottom: 8px; color: var(--if-primary);"></i>
+            <div style="font-weight: 700; color: var(--if-text);">Tree Importance</div>
+            <div style="font-size: 11px; color: var(--if-text-muted); margin-top: 4px;">Gini impurity / variance reduction</div>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top: 20px; display: flex; justify-content: flex-end;">
+        <button type="submit" id="calcBtn" class="if-btn if-btn-primary">
+          <i data-lucide="calculator" class="if-icon"></i>
+          <span>Calculate Feature Scores</span>
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Step 2: Review Features & Manual Selection -->
+{% if sorted_features_json %}
+<div class="if-card" id="featureSelectionCard" style="margin-bottom: 24px;">
+  <div class="if-card-header">
+    <i data-lucide="check-square" class="if-icon-lg" style="color: var(--if-primary);"></i>
+    <h2 class="if-card-title">2. Feature Selection</h2>
+    <span class="if-badge if-badge-primary">
+      <span id="selectedCount">0</span> of <span id="totalAvailableCount">0</span> features selected
+    </span>
+  </div>
+  <div class="if-card-body">
+
+    <!-- Bulk Selection Bar -->
+    <div class="if-flex-between" style="margin-bottom: 16px; padding: 12px 16px; background: var(--if-surface-2); border-radius: var(--if-radius-md); border: 1px solid var(--if-border);">
+      <div class="if-flex" style="gap: 8px;">
+        <button type="button" class="if-btn if-btn-secondary if-btn-sm" onclick="selectAllFeatures()">
+          <i data-lucide="check-square" class="if-icon-sm"></i>
+          <span>Select All</span>
+        </button>
+        <button type="button" class="if-btn if-btn-secondary if-btn-sm" onclick="deselectAllFeatures()">
+          <i data-lucide="square" class="if-icon-sm"></i>
+          <span>Clear All</span>
+        </button>
+      </div>
+      <div style="font-size: 12px; color: var(--if-text-muted);">
+        Target: <strong style="color: var(--if-text);">{{ target }}</strong> (Excluded from feature list)
+      </div>
+    </div>
+
+    <!-- Validation Error Alert -->
+    <div id="validationError" class="if-alert if-alert-danger" style="display: none; margin-bottom: 16px;">
+      <i data-lucide="alert-circle" class="if-alert-icon"></i>
+      <div class="if-alert-content">
+        <strong>Selection Required:</strong> Please select at least one feature to continue.
+      </div>
+    </div>
+
+    <!-- Features Table -->
+    <div class="if-table-wrap" style="margin-bottom: 20px;">
+      <table class="if-table">
+        <thead>
+          <tr>
+            <th style="width: 40px; text-align: center;">Select</th>
+            <th>Rank & Feature Name</th>
+            <th>Score / Metric</th>
+            <th>Relative Importance Bar</th>
+          </tr>
+        </thead>
+        <tbody id="featuresBody"></tbody>
+      </table>
+    </div>
+
+    <!-- Save Selection Form -->
+    <form method="post" id="featureForm">
+      {% csrf_token %}
+      <input type="hidden" name="selected_features" id="selectedFeaturesInput">
+      <input type="hidden" name="save_selection" value="true">
+
+      <div class="if-flex-between" style="padding-top: 16px; border-top: 1px solid var(--if-border);">
+        <a href="{% url 'scale_features' %}" class="if-btn if-btn-secondary">
+          <span>Skip Feature Selection →</span>
+        </a>
+        <button type="button" onclick="submitFeatureSelection()" class="if-btn if-btn-success if-btn-lg">
+          <span>Continue →</span>
+          <i data-lucide="arrow-right" class="if-icon"></i>
+        </button>
+      </div>
+    </form>
+
+  </div>
+</div>
+
+<!-- Dataset Live Preview Section -->
+<div class="if-card" style="margin-bottom: 24px;">
+  <div class="if-card-header">
+    <i data-lucide="table" class="if-icon-lg" style="color: var(--if-primary);"></i>
+    <h2 class="if-card-title">Live Dataset Preview (Selected Features + Target)</h2>
+  </div>
+  <div class="if-card-body">
+    <div class="if-table-wrap" id="previewTableContainer">
+      <div class="if-skeleton-block"></div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  function selectMethod(method, el) {
+    document.getElementById('selectedMethod').value = method;
+    document.querySelectorAll('.method-card').forEach(c => {
+      c.classList.remove('selected');
+      c.setAttribute('aria-checked', 'false');
+    });
+    el.classList.add('selected');
+    el.setAttribute('aria-checked', 'true');
+  }
+
+  function handleMethodKey(e, method, el) {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      selectMethod(method, el);
+    }
+  }
+
+  function showLoadingState() {
+    var btn = document.getElementById('calcBtn');
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '<i data-lucide="loader-2" class="if-icon if-spin"></i> <span>Calculating Scores...</span>';
+      if (window.lucide) window.lucide.createIcons();
+    }
+  }
+</script>
+
+{% if sorted_features_json %}
+<script>
+  var featureScores = {{ feature_scores_json|safe }};
+  var sortedFeatures = {{ sorted_features_json|safe }};
+  var fullDataset = [];
+  var targetColumn = '{{ target }}';
+
+  function escapeHtml(text) {
+    if (text === null || text === undefined) return '';
+    var div = document.createElement('div');
+    div.textContent = String(text);
+    return div.innerHTML;
+  }
+
+  function getScoreClass(score, method) {
+    if (method === 'correlation') {
+      if (score > 0.3) return 'score-positive';
+      if (score < -0.3) return 'score-negative';
+      return 'score-neutral';
+    }
+    if (score > 0.5) return 'score-positive';
+    if (score > 0.2) return 'score-neutral';
+    return 'score-negative';
+  }
+
+  function renderFeaturesTable() {
+    var tbody = document.getElementById('featuresBody');
+    var method = '{{ method }}';
+    if (!tbody || !sortedFeatures || sortedFeatures.length === 0) return;
+
+    // Filter out target column strictly
+    var candidateFeatures = sortedFeatures.filter(function(f) {
+      return f !== targetColumn && f.toLowerCase().replace(/ /g, '_') !== targetColumn.toLowerCase().replace(/ /g, '_');
+    });
+
+    var countEl = document.getElementById('totalAvailableCount');
+    if (countEl) countEl.textContent = candidateFeatures.length;
+
+    var maxScore = 0;
+    for (var i = 0; i < candidateFeatures.length; i++) {
+      var feat = candidateFeatures[i];
+      var score = Math.abs(featureScores[feat] || 0);
+      if (score > maxScore) maxScore = score;
+    }
+    if (maxScore === 0) maxScore = 1;
+
+    var html = '';
+    for (var i = 0; i < candidateFeatures.length; i++) {
+      var feat = candidateFeatures[i];
+      var score = featureScores[feat] !== undefined ? featureScores[feat] : 0;
+      var scoreClass = getScoreClass(score, method);
+      var barWidth = (Math.abs(score) / maxScore) * 100;
+      var barColor = score > 0 ? 'var(--if-success)' : (score < 0 ? 'var(--if-danger)' : 'var(--if-text-muted)');
+      var scoreDisplay = typeof score === 'number' ? score.toFixed(4) : score;
+      var methodLabel = method === 'correlation' ? 'Corr: ' : (method === 'kbest' ? 'F-Score: ' : 'Importance: ');
+      var rank = i + 1;
+
+      html += '<tr>';
+      html += '<td style="text-align: center;">';
+      html += '  <input type="checkbox" name="selected" value="' + escapeHtml(feat) + '" class="feature-checkbox" checked onchange="handleCheckboxChange();">';
+      html += '</td>';
+      html += '<td>';
+      html += '  <span style="color: var(--if-text-muted); font-size: 11px; margin-right: 8px;">#' + rank + '</span>';
+      html += '  <strong>' + escapeHtml(feat) + '</strong>';
+      html += '</td>';
+      html += '<td class="' + scoreClass + '">' + methodLabel + scoreDisplay + '</td>';
+      html += '<td>';
+      html += '  <div class="score-bar-bg">';
+      html += '    <div class="score-bar-fill" style="width: ' + Math.min(100, Math.max(2, barWidth)) + '%; background: ' + barColor + ';"></div>';
+      html += '  </div>';
+      html += '</td>';
+      html += '</tr>';
+    }
+
+    tbody.innerHTML = html;
+    updateSelectedCount();
+    updatePreviewTable();
+  }
+
+  function handleCheckboxChange() {
+    updateSelectedCount();
+    updatePreviewTable();
+  }
+
+  function selectAllFeatures() {
+    document.querySelectorAll('.feature-checkbox').forEach(function(cb) { cb.checked = true; });
+    handleCheckboxChange();
+  }
+
+  function deselectAllFeatures() {
+    document.querySelectorAll('.feature-checkbox').forEach(function(cb) { cb.checked = false; });
+    handleCheckboxChange();
+  }
+
+  function updateSelectedCount() {
+    var checked = document.querySelectorAll('.feature-checkbox:checked');
+    var countEl = document.getElementById('selectedCount');
+    if (countEl) countEl.textContent = checked.length;
+    
+    var err = document.getElementById('validationError');
+    if (err && checked.length > 0) err.style.display = 'none';
+  }
+
+  function updatePreviewTable() {
+    var selectedCheckboxes = document.querySelectorAll('.feature-checkbox:checked');
+    var selectedFeatures = Array.from(selectedCheckboxes).map(function(cb) { return cb.value; });
+    var previewColumns = [...selectedFeatures, targetColumn];
+
+    var previewContainer = document.getElementById('previewTableContainer');
+    if (!previewContainer || fullDataset.length === 0) return;
+
+    var previewHtml = '<table class="if-table"><thead><tr>';
+    previewColumns.forEach(function(col) { previewHtml += '<th>' + escapeHtml(col) + '</th>'; });
+    previewHtml += '</tr></thead><tbody>';
+
+    var displayRows = Math.min(fullDataset.length, 50);
+    for (var i = 0; i < displayRows; i++) {
+      var row = fullDataset[i];
+      previewHtml += '<tr>';
+      previewColumns.forEach(function(col) {
+        var value = row[col];
+        if (value === null || value === undefined) previewHtml += '<td>-</td>';
+        else if (typeof value === 'number') previewHtml += '<td>' + value.toFixed(2) + '</td>';
+        else previewHtml += '<td>' + escapeHtml(String(value)) + '</td>';
+      });
+      previewHtml += '</tr>';
+    }
+    previewHtml += '</tbody></table>';
+
+    previewContainer.innerHTML = previewHtml;
+  }
+
+  function fetchDatasetForPreview() {
+    fetch('/preprocessing/features/get-encoded-data/', {
+      headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.success && data.encoded_data_html) {
+        var parser = new DOMParser();
+        var doc = parser.parseFromString(data.encoded_data_html, 'text/html');
+        var rows = doc.querySelectorAll('tbody tr');
+        fullDataset = [];
+        rows.forEach(function(row) {
+          var rowData = {};
+          var headers = doc.querySelectorAll('thead th');
+          headers.forEach(function(th, index) {
+            var colName = th.textContent.trim();
+            var cells = row.querySelectorAll('td');
+            if (cells[index]) {
+              var cellValue = cells[index].textContent.trim();
+              var numValue = parseFloat(cellValue);
+              rowData[colName] = isNaN(numValue) ? cellValue : numValue;
+            }
+          });
+          fullDataset.push(rowData);
+        });
+        updatePreviewTable();
+      }
+    })
+    .catch(function(err) { console.log('Preview dataset fetch:', err); });
+  }
+
+  function submitFeatureSelection() {
+    var selectedFeatures = [];
+    document.querySelectorAll('.feature-checkbox:checked').forEach(function(cb) {
+      selectedFeatures.push(cb.value);
+    });
+
+    if (selectedFeatures.length === 0) {
+      var err = document.getElementById('validationError');
+      if (err) {
+        err.style.display = 'flex';
+        err.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+      if (window.IF && window.IF.toast) {
+        IF.toast({
+          type: 'warning',
+          title: 'Selection Required',
+          body: 'Please select at least one feature to continue.'
+        });
+      }
+      return;
+    }
+
+    document.getElementById('selectedFeaturesInput').value = JSON.stringify(selectedFeatures);
+    document.getElementById('featureForm').submit();
+  }
+
+  document.addEventListener('DOMContentLoaded', function() {
+    renderFeaturesTable();
+    fetchDatasetForPreview();
+  });
+</script>
+{% endif %}
+{% endblock %}

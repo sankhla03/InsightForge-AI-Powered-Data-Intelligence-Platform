@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Saved Reports{% endblock %}
+{% block page_title %}Saved Reports Archive{% endblock %}
+
+{% block content %}
+<div class="if-page-header">
+  <div class="if-flex-between">
+    <div>
+      <h1 class="if-section-title">Saved Reports Archive</h1>
+      <p class="if-section-sub">Access previously generated PDF and JSON audit reports stored in <code>saved_reports/</code>.</p>
+    </div>
+    <div class="if-flex">
+      <a href="{% url 'generate_report' %}" class="if-btn if-btn-secondary">
+        <i data-lucide="file-text" class="if-icon"></i>
+        <span>Generate New Report</span>
+      </a>
+      <a href="{% url 'download_report_pdf' %}" class="if-btn if-btn-primary">
+        <i data-lucide="download" class="if-icon"></i>
+        <span>Download PDF</span>
+      </a>
+    </div>
+  </div>
+</div>
+
+{% if reports %}
+<div class="if-grid-2" style="gap: 20px;">
+  {% for report in reports %}
+  <div class="if-card">
+    <div class="if-card-header">
+      <i data-lucide="{% if report.type == 'PDF' %}file-text{% else %}file-code{% endif %}" class="if-icon-lg" style="color: var(--if-primary);"></i>
+      <h2 class="if-card-title" style="font-size: 14px;">{{ report.filename }}</h2>
+      <span class="if-badge {% if report.type == 'PDF' %}if-badge-primary{% else %}if-badge-neutral{% endif %}">{{ report.type }}</span>
+    </div>
+    <div class="if-card-body">
+      <div class="if-flex-between" style="font-size: 12px; color: var(--if-text-muted);">
+        <span><i data-lucide="hard-drive" class="if-icon-sm"></i> {{ report.size }}</span>
+        <span><i data-lucide="clock" class="if-icon-sm"></i> {{ report.created }}</span>
+      </div>
+    </div>
+    <div class="if-card-footer" style="justify-content: flex-end;">
+      <a href="file://{{ report.path }}" class="if-btn if-btn-secondary if-btn-sm" target="_blank">
+        <i data-lucide="download" class="if-icon-sm"></i>
+        <span>Download {{ report.type }}</span>
+      </a>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="if-empty-state">
+  <div class="if-empty-icon"><i data-lucide="folder-open" class="if-icon-lg"></i></div>
+  <div class="if-empty-title">No Saved Reports Found</div>
+  <div class="if-empty-desc">Generate your first ML pipeline report to save PDF audit records to disk.</div>
+  <a href="{% url 'download_report_pdf' %}" class="if-btn if-btn-primary">
+    <i data-lucide="download" class="if-icon"></i>
+    <span>Generate Report Now</span>
+  </a>
+</div>
+{% endif %}
+
+{% endblock %}

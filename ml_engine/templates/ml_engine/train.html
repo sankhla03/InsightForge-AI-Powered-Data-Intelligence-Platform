@@ -1,0 +1,271 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Model Training & Evaluation{% endblock %}
+{% block page_title %}Model Training & Comparative Benchmark{% endblock %}
+
+{% block extra_css %}
+<style>
+  .tp { color: var(--if-success); font-weight: 700; }
+  .fp { color: var(--if-danger); font-weight: 700; }
+  .fn { color: var(--if-warning); font-weight: 700; }
+  .tn { color: var(--if-info); font-weight: 700; }
+  .importance-bar-fill { height: 100%; background: var(--if-primary); border-radius: 99px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="if-page-header">
+  <div class="if-flex-between">
+    <div>
+      <h1 class="if-section-title">Model Training & Benchmark</h1>
+      <p class="if-section-sub">Train candidate algorithms, compare performance metrics, and evaluate best model fit.</p>
+    </div>
+    {% if results %}
+    <div class="if-flex">
+      <a href="{% url 'predict' %}" class="if-btn if-btn-success">
+        <span>Proceed to Prediction</span>
+        <i data-lucide="arrow-right" class="if-icon"></i>
+      </a>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+{% if data_source %}
+<div class="if-alert if-alert-info" style="margin-bottom: 24px;">
+  <i data-lucide="database" class="if-alert-icon"></i>
+  <div class="if-alert-content">
+    <strong>Data Source Active:</strong> {{ data_source }}
+    {% if 'Scaled' in data_source %} — Features standardized using StandardScaler{% endif %}
+  </div>
+</div>
+{% endif %}
+
+<!-- Target Selection Card -->
+<div class="if-card" style="margin-bottom: 24px;">
+  <div class="if-card-header">
+    <i data-lucide="target" class="if-icon-lg" style="color: var(--if-primary);"></i>
+    <h2 class="if-card-title">Select Target Variable & Initiate Training</h2>
+  </div>
+  <div class="if-card-body">
+    <form method="post" class="if-flex" style="gap: 16px; flex-wrap: wrap;">
+      {% csrf_token %}
+
+      <div style="flex: 1; min-width: 280px;">
+        <select name="target" class="if-select" required>
+          <option value="">-- Select Target Column --</option>
+          {% for col in columns %}
+            <option value="{{ col }}" {% if col == saved_target %}selected{% endif %}>{{ col }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <button type="submit" class="if-btn if-btn-primary if-btn-lg">
+        <i data-lucide="play" class="if-icon"></i>
+        <span>Train & Compare Models</span>
+      </button>
+    </form>
+  </div>
+</div>
+
+{% if results %}
+<!-- Model Comparison Results -->
+<div class="if-card" style="margin-bottom: 24px;">
+  <div class="if-card-header">
+    <i data-lucide="award" class="if-icon-lg" style="color: var(--if-primary);"></i>
+    <h2 class="if-card-title">Model Benchmark Results</h2>
+    <span class="if-badge if-badge-primary" style="text-transform: capitalize;">Task: {{ results.task_type }}</span>
+  </div>
+  <div class="if-card-body">
+
+    <div class="if-flex" style="flex-wrap: wrap; gap: 8px; margin-bottom: 20px;">
+      <span class="if-badge if-badge-neutral">Target: <strong>{{ results.target }}</strong></span>
+      {% if results.task_type == 'classification' %}
+        <span class="if-badge if-badge-info">Classes: {{ results.n_classes }}</span>
+      {% else %}
+        <span class="if-badge if-badge-info">Range: {{ results.y_test_min }} to {{ results.y_test_max }}</span>
+      {% endif %}
+      <span class="if-badge if-badge-neutral">Predictors Used: {{ results.features|length }}</span>
+    </div>
+
+    <!-- Metrics Table -->
+    {% if results.task_type == 'classification' %}
+    <div class="if-table-wrap" style="margin-bottom: 24px;">
+      <table class="if-table">
+        <thead>
+          <tr>
+            <th>Model Algorithm</th>
+            <th>Accuracy (%)</th>
+            <th>Precision (%)</th>
+            <th>Recall (%)</th>
+            <th>F1-Score (%)</th>
+            <th>ROC-AUC (%)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for model in results.model_results_list %}
+          <tr class="{% if model.is_best %}best-row{% endif %}">
+            <td style="font-weight: 700;">
+              {% if model.is_best %}<span class="if-badge if-badge-success" style="margin-right: 6px;">BEST</span>{% endif %}{{ model.name }}
+            </td>
+            <td>{{ model.accuracy }}</td>
+            <td>{{ model.precision }}</td>
+            <td>{{ model.recall }}</td>
+            <td style="font-weight: 700; color: var(--if-primary);">{{ model.f1 }}</td>
+            <td>{{ model.roc_auc }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Best Model Summary Card -->
+    <div style="padding: 20px; border: 1.5px solid var(--if-success); border-radius: var(--if-radius-md); background: var(--if-success-light); margin-bottom: 24px;">
+      <h3 style="font-size: 16px; font-weight: 700; color: var(--if-success); margin-bottom: 12px;">
+        <i data-lucide="check-circle-2" class="if-icon"></i> Best Model Selected: {{ results.best_model }}
+      </h3>
+      <div class="if-stat-grid" style="margin-bottom: 16px;">
+        <div class="if-metric-card"><div class="if-metric-value">{{ results.best_accuracy }}%</div><div class="if-metric-label">Accuracy</div></div>
+        <div class="if-metric-card"><div class="if-metric-value">{{ results.best_precision }}%</div><div class="if-metric-label">Precision</div></div>
+        <div class="if-metric-card"><div class="if-metric-value">{{ results.best_recall }}%</div><div class="if-metric-label">Recall</div></div>
+        <div class="if-metric-card" style="border-left: 3px solid var(--if-success);"><div class="if-metric-value" style="color: var(--if-success);">{{ results.best_f1 }}%</div><div class="if-metric-label">F1-Score</div></div>
+      </div>
+      <div style="font-size: 13px; color: var(--if-text);">
+        <strong>Selection Rationale:</strong> Achieves optimal harmonic mean (F1: {{ results.best_f1 }}%) and class separation (ROC-AUC: {{ results.best_roc_auc }}%).
+      </div>
+    </div>
+
+    <!-- Confusion Matrix -->
+    {% if results.cm_image_path %}
+    <div style="margin-bottom: 24px;">
+      <h3 class="if-card-title" style="margin-bottom: 12px;">Confusion Matrix — {{ results.best_model }}</h3>
+      <div class="if-chart-container" style="min-height: 300px; padding: 20px;">
+        <img src="{{ results.cm_image_path }}" alt="Confusion Matrix Heatmap">
+      </div>
+
+      {% if results.cm_metrics %}
+      <div class="if-table-wrap" style="margin-top: 16px;">
+        <table class="if-table">
+          <thead>
+            <tr>
+              <th>Class Label</th>
+              <th class="tp">True Positives (TP)</th>
+              <th class="fp">False Positives (FP)</th>
+              <th class="fn">False Negatives (FN)</th>
+              <th class="tn">True Negatives (TN)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for metric in results.cm_metrics %}
+            <tr>
+              <td style="font-weight: 700;">{{ metric.class }}</td>
+              <td class="tp">{{ metric.tp }}</td>
+              <td class="fp">{{ metric.fp }}</td>
+              <td class="fn">{{ metric.fn }}</td>
+              <td class="tn">{{ metric.tn }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    {% else %}
+    <!-- Regression Table -->
+    <div class="if-table-wrap" style="margin-bottom: 24px;">
+      <table class="if-table">
+        <thead>
+          <tr>
+            <th>Model Algorithm</th>
+            <th>Accuracy (within 10%)</th>
+            <th>MAE</th>
+            <th>RMSE</th>
+            <th>R² Score (%)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for model in results.model_results_list %}
+          <tr class="{% if model.is_best %}best-row{% endif %}">
+            <td style="font-weight: 700;">
+              {% if model.is_best %}<span class="if-badge if-badge-success" style="margin-right: 6px;">BEST</span>{% endif %}{{ model.name }}
+            </td>
+            <td>{{ model.accuracy }}%</td>
+            <td>{{ model.mae }}</td>
+            <td>{{ model.rmse }}</td>
+            <td style="font-weight: 700; color: var(--if-primary);">{{ model.r2 }}%</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Best Regression Model Summary -->
+    <div style="padding: 20px; border: 1.5px solid var(--if-success); border-radius: var(--if-radius-md); background: var(--if-success-light); margin-bottom: 24px;">
+      <h3 style="font-size: 16px; font-weight: 700; color: var(--if-success); margin-bottom: 12px;">
+        <i data-lucide="check-circle-2" class="if-icon"></i> Best Model Selected: {{ results.best_model }}
+      </h3>
+      <div class="if-stat-grid" style="margin-bottom: 16px;">
+        <div class="if-metric-card" style="border-left: 3px solid var(--if-success);"><div class="if-metric-value" style="color: var(--if-success);">{{ results.best_r2 }}%</div><div class="if-metric-label">R² Score</div></div>
+        <div class="if-metric-card"><div class="if-metric-value">{{ results.best_accuracy }}%</div><div class="if-metric-label">Accuracy (±10%)</div></div>
+        <div class="if-metric-card"><div class="if-metric-value">{{ results.best_mae }}</div><div class="if-metric-label">MAE</div></div>
+        <div class="if-metric-card"><div class="if-metric-value">{{ results.best_rmse }}</div><div class="if-metric-label">RMSE</div></div>
+      </div>
+    </div>
+
+    {% if results.avp_image_path %}
+    <div style="margin-bottom: 24px;">
+      <h3 class="if-card-title" style="margin-bottom: 12px;">Actual vs. Predicted Evaluation Plot</h3>
+      <div class="if-chart-container">
+        <img src="{{ results.avp_image_path }}" alt="Actual vs Predicted">
+      </div>
+    </div>
+    {% endif %}
+
+    {% if results.residuals_image_path %}
+    <div style="margin-bottom: 24px;">
+      <h3 class="if-card-title" style="margin-bottom: 12px;">Residuals Distribution Plot</h3>
+      <div class="if-chart-container">
+        <img src="{{ results.residuals_image_path }}" alt="Residuals Distribution">
+      </div>
+    </div>
+    {% endif %}
+
+    {% endif %}
+
+    <!-- Feature Importance -->
+    {% if results.feature_importance %}
+    <div style="margin-top: 24px;">
+      <h3 class="if-card-title" style="margin-bottom: 16px;">Model Feature Importance</h3>
+      <div class="if-flex-col" style="gap: 10px;">
+        {% for feature, importance in results.feature_importance %}
+        <div class="if-flex-between">
+          <span style="font-weight: 600; width: 180px;">{{ feature }}</span>
+          <div style="flex: 1; background: var(--if-surface-3); height: 16px; border-radius: 99px; overflow: hidden; margin: 0 16px;">
+            <div class="importance-bar-fill" style="width: {{ importance|add:0 }}%;"></div>
+          </div>
+          <span style="font-family: var(--if-font-mono); font-weight: 700; width: 60px; text-align: right;">{{ importance|floatformat:3 }}</span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    <div class="if-flex-between" style="margin-top: 32px; padding-top: 20px; border-top: 1px solid var(--if-border);">
+      <a href="{% url 'generate_report' %}" class="if-btn if-btn-secondary">
+        <i data-lucide="file-text" class="if-icon"></i>
+        <span>Skip to Report</span>
+      </a>
+      <a href="{% url 'predict' %}" class="if-btn if-btn-success if-btn-lg">
+        <span>Proceed to Prediction</span>
+        <i data-lucide="arrow-right" class="if-icon"></i>
+      </a>
+    </div>
+
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}

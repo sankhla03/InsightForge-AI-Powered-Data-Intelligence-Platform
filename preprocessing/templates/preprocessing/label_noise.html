@@ -1,0 +1,196 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Label Noise Detection{% endblock %}
+{% block page_title %}Label Noise Detection & Auto-Fix{% endblock %}
+
+{% block extra_css %}
+<style>
+  .conf-high { background-color: var(--if-success-light) !important; }
+  .conf-med  { background-color: var(--if-warning-light) !important; }
+  .conf-low  { background-color: var(--if-danger-light) !important; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="if-page-header">
+  <div class="if-flex-between">
+    <div>
+      <h1 class="if-section-title">Label Noise Detection</h1>
+      <p class="if-section-sub">Identify mislabeled or noisy classification target values using machine learning cross-validation.</p>
+    </div>
+    <div class="if-flex">
+      <a href="/visualization/" class="if-btn if-btn-primary">
+        <span>Continue to Visualization</span>
+        <i data-lucide="arrow-right" class="if-icon"></i>
+      </a>
+    </div>
+  </div>
+</div>
+
+<!-- Detection Target Form -->
+<div class="if-card" style="margin-bottom: 24px;">
+  <div class="if-card-header">
+    <i data-lucide="target" class="if-icon-lg" style="color: var(--if-primary);"></i>
+    <h2 class="if-card-title">Select Target Variable for Noise Audit</h2>
+  </div>
+  <div class="if-card-body">
+    <form method="post" action="/preprocessing/label-noise/" class="if-flex" style="gap: 12px; flex-wrap: wrap;">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="detect">
+      
+      <div style="flex: 1; min-width: 240px;">
+        <select name="target" class="if-select" required>
+          {% for col in columns %}
+            <option value="{{ col }}">{{ col }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <button type="submit" class="if-btn if-btn-primary">
+        <i data-lucide="search" class="if-icon"></i>
+        <span>Detect Label Noise</span>
+      </button>
+
+      {% if request.session.noise_detection_completed %}
+      <button type="submit" name="action" value="clear" class="if-btn if-btn-secondary" style="margin-left: auto;">
+        <i data-lucide="refresh-cw" class="if-icon"></i>
+        <span>Reset Results</span>
+      </button>
+      {% endif %}
+    </form>
+  </div>
+</div>
+
+<!-- Results Card -->
+{% if noise_report and review_data %}
+<div class="if-card" style="margin-bottom: 24px;">
+  <div class="if-card-header">
+    <i data-lucide="activity" class="if-icon-lg" style="color: var(--if-primary);"></i>
+    <h2 class="if-card-title">Detection Results</h2>
+    <span class="if-badge if-badge-warning">{{ noisy_count }} Noisy Samples</span>
+  </div>
+  <div class="if-card-body">
+
+    <div class="if-stat-grid" style="margin-bottom: 20px;">
+      <div class="if-metric-card">
+        <div class="if-metric-value">{{ noise_report.total_rows }}</div>
+        <div class="if-metric-label">Total Rows</div>
+      </div>
+      <div class="if-metric-card" style="border-left: 3px solid var(--if-danger);">
+        <div class="if-metric-value" style="color: var(--if-danger);">{{ noisy_count }}</div>
+        <div class="if-metric-label">Noisy Rows</div>
+      </div>
+      <div class="if-metric-card" style="border-left: 3px solid var(--if-warning);">
+        <div class="if-metric-value" style="color: var(--if-warning);">{{ noise_report.noise_percent }}%</div>
+        <div class="if-metric-label">Noise Percentage</div>
+      </div>
+      <div class="if-metric-card">
+        <div class="if-metric-value" style="font-size: 16px; font-weight: 700;">{{ noise_report.method }}</div>
+        <div class="if-metric-label">Method</div>
+      </div>
+    </div>
+
+    {% if noise_report.detection_reason %}
+    <div class="if-alert if-alert-info" style="margin-bottom: 20px;">
+      <i data-lucide="info" class="if-alert-icon"></i>
+      <div class="if-alert-content">
+        <div class="if-alert-title">Detection Insight</div>
+        <div class="if-alert-body">{{ noise_report.detection_reason }}</div>
+      </div>
+    </div>
+    {% endif %}
+
+    <div class="if-table-wrap" style="margin-bottom: 20px;">
+      <table class="if-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Original Label</th>
+            <th>Suggested Correction</th>
+            <th>Confidence</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+
+    <div class="if-flex-between">
+      <button id="autoFixBtn" onclick="autoFixAll()" class="if-btn if-btn-success if-btn-lg">
+        <i data-lucide="check-circle-2" class="if-icon"></i>
+        <span>Auto-Fix All Labels</span>
+      </button>
+
+      <a href="/visualization/" class="if-btn if-btn-primary if-btn-lg">
+        <span>Proceed to Visualization</span>
+        <i data-lucide="arrow-right" class="if-icon"></i>
+      </a>
+    </div>
+
+    <div id="successMessage" class="if-alert if-alert-success" style="display:none; margin-top: 20px;">
+      <i data-lucide="check-circle" class="if-alert-icon"></i>
+      <div class="if-alert-content">All noisy labels have been updated in the dataset session.</div>
+    </div>
+
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block extra_js %}
+{% if noise_report and review_data %}
+<script>
+  var reviewData = {{ review_data|safe }};
+  var tbody = document.getElementById('tbody');
+
+  if (tbody && reviewData && reviewData.length > 0) {
+    var html = '';
+    for (var i = 0; i < reviewData.length; i++) {
+      var item = reviewData[i];
+      var conf = parseFloat(item.confidence) || 0;
+      var cls = conf >= 0.9 ? 'conf-high' : (conf < 0.7 ? 'conf-low' : 'conf-med');
+      html += '<tr class="' + cls + '">';
+      html += '<td>' + (i + 1) + '</td>';
+      html += '<td><strong>' + item.original_target + '</strong></td>';
+      html += '<td>' + item.predicted_target + '</td>';
+      html += '<td>' + (conf * 100).toFixed(1) + '%</td></tr>';
+    }
+    tbody.innerHTML = html;
+  }
+
+  function autoFixAll() {
+    var btn = document.getElementById('autoFixBtn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Applying Corrections...'; }
+
+    var formData = new FormData();
+    formData.append('noise_data', JSON.stringify(reviewData));
+
+    var csrfInput = document.querySelector('input[name="csrfmiddlewaretoken"]');
+    var csrfToken = csrfInput ? csrfInput.value : '';
+
+    fetch('/preprocessing/label-noise/auto-fix/', {
+      method: 'POST',
+      body: formData,
+      headers: { 'X-CSRFToken': csrfToken }
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (data.success) {
+        document.getElementById('successMessage').style.display = 'flex';
+        if (btn) btn.style.display = 'none';
+        IF.toast({ type: 'success', title: 'Label Noise Fixed', body: 'Dataset labels successfully corrected.' });
+      } else {
+        alert('Error: ' + data.message);
+        if (btn) { btn.disabled = false; btn.textContent = 'Auto-Fix All Labels'; }
+      }
+    })
+    .catch(err => {
+      console.error(err);
+      alert('An error occurred while fixing labels.');
+      if (btn) { btn.disabled = false; btn.textContent = 'Auto-Fix All Labels'; }
+    });
+  }
+</script>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Upload Dataset{% endblock %}
+{% block page_title %}Upload Dataset{% endblock %}
+
+{% block content %}
+<div class="if-page-header">
+  <div class="if-flex-between">
+    <div>
+      <h1 class="if-section-title">Import Dataset</h1>
+      <p class="if-section-sub">Upload your structured data file to initialize the machine learning pipeline.</p>
+    </div>
+    {% if preview %}
+    <span class="if-badge if-badge-success if-badge-live">Dataset Active</span>
+    {% endif %}
+  </div>
+</div>
+
+<div class="if-grid" style="grid-template-columns: 1fr; gap: 24px;">
+  <!-- Upload Card -->
+  <div class="if-card">
+    <div class="if-card-header">
+      <i data-lucide="upload-cloud" class="if-icon-lg" style="color: var(--if-primary);"></i>
+      <h2 class="if-card-title">Select Data Source</h2>
+    </div>
+    <div class="if-card-body">
+      {% if error %}
+      <div class="if-alert if-alert-danger">
+        <i data-lucide="alert-circle" class="if-alert-icon"></i>
+        <div class="if-alert-content">
+          <div class="if-alert-title">Upload Error</div>
+          <div class="if-alert-body">{{ error }}</div>
+        </div>
+      </div>
+      {% endif %}
+
+      <form method="post" enctype="multipart/form-data" id="uploadForm">
+        {% csrf_token %}
+
+        <div class="if-file-drop" id="fileDropZone">
+          <input type="file" name="dataset" id="dataset" accept=".csv,.xlsx,.xls,.json" required onchange="handleFileSelect(this); updateFileLabel(this);">
+          <div class="if-file-drop-icon">
+            <i data-lucide="file-up" style="width: 40px; height: 40px; color: var(--if-primary);"></i>
+          </div>
+          <div class="if-file-drop-text" id="dropTitle">Drag and drop your dataset here</div>
+          <div class="if-file-drop-sub">Supports CSV, Excel (.xlsx, .xls), or JSON up to 50 MB</div>
+        </div>
+
+        <div id="fileNameDisplay" class="if-alert if-alert-info" style="display: none; margin-top: 16px;">
+          <i data-lucide="file-text" class="if-alert-icon"></i>
+          <div class="if-alert-content" id="fileNameText"></div>
+        </div>
+
+        <div style="margin-top: 20px; display: flex; justify-content: flex-end;">
+          <button type="submit" class="if-btn if-btn-primary if-btn-lg">
+            <i data-lucide="arrow-right" class="if-icon"></i>
+            <span>Upload & Inspect Data</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  {% if preview %}
+  <!-- Preview Card -->
+  <div class="if-card">
+    <div class="if-card-header">
+      <i data-lucide="table" class="if-icon-lg" style="color: var(--if-primary);"></i>
+      <h2 class="if-card-title">Dataset Preview</h2>
+      <span class="if-badge if-badge-primary">{{ rows }} rows × {{ cols }} columns</span>
+    </div>
+    <div class="if-card-body">
+      <div class="if-table-wrap">
+        {{ preview|safe }}
+      </div>
+    </div>
+    <div class="if-card-footer" style="justify-content: space-between;">
+      <div class="if-flex" style="color: var(--if-text-muted); font-size: 13px;">
+        <i data-lucide="check-circle-2" class="if-icon" style="color: var(--if-success);"></i>
+        <span>Dataset successfully stored in active session.</span>
+      </div>
+      <a href="{% url 'clean_data' %}" class="if-btn if-btn-success if-btn-lg">
+        <span>Proceed to Data Cleaning</span>
+        <i data-lucide="arrow-right" class="if-icon"></i>
+      </a>
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  function handleFileSelect(input) {
+    const fileNameDisplay = document.getElementById('fileNameDisplay');
+    const fileNameText = document.getElementById('fileNameText');
+    const dropTitle = document.getElementById('dropTitle');
+
+    if (input.files && input.files[0]) {
+      const file = input.files[0];
+      const fileSize = (file.size / 1024).toFixed(1);
+      const fileName = file.name;
+      const fileExtension = fileName.split('.').pop().toUpperCase();
+
+      dropTitle.textContent = `Selected: ${fileName}`;
+      fileNameText.innerHTML = `<strong>Selected file:</strong> ${fileName} (${fileSize} KB, ${fileExtension})`;
+      fileNameDisplay.style.display = 'flex';
+    } else {
+      fileNameDisplay.style.display = 'none';
+      dropTitle.textContent = 'Drag and drop your dataset here';
+    }
+  }
+
+  function updateFileLabel(input) {
+    // Label updated automatically by handleFileSelect
+  }
+
+  document.addEventListener('DOMContentLoaded', function() {
+    IF.initFileDrop('fileDropZone');
+  });
+</script>
+{% endblock %}

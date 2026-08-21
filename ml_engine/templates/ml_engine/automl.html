@@ -1,0 +1,431 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}AutoML Mode{% endblock %}
+{% block page_title %}⚡ AutoML — One-Click Pipeline{% endblock %}
+{% block meta_description %}AutoML mode for InsightForge: one-click intelligent preprocessing and model training.{% endblock %}
+
+{% block extra_css %}
+<style>
+  /* AutoML-specific styles */
+  .automl-hero {
+    background: var(--if-sidebar-bg);
+    border-radius: var(--if-radius-lg);
+    padding: 32px;
+    margin-bottom: 24px;
+    border: 1px solid var(--if-border);
+  }
+  .automl-hero-title {
+    font-size: 26px;
+    font-weight: 800;
+    color: white;
+    letter-spacing: -0.5px;
+    margin-bottom: 8px;
+  }
+  .automl-hero-subtitle {
+    font-size: 14px;
+    color: rgba(255,255,255,.7);
+    max-width: 560px;
+    line-height: 1.5;
+  }
+  .automl-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: var(--if-primary);
+    color: white;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 99px;
+    margin-bottom: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  /* Results cards */
+  .results-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+  .result-metric {
+    background: var(--if-surface);
+    border: 1px solid var(--if-border);
+    border-radius: var(--if-radius-md);
+    padding: 20px;
+    text-align: center;
+  }
+  .result-metric-value {
+    font-size: 28px;
+    font-weight: 800;
+    color: var(--if-primary);
+    letter-spacing: -0.5px;
+    line-height: 1;
+    margin: 8px 0 4px;
+  }
+  .result-metric-label {
+    font-size: 12px;
+    color: var(--if-text-muted);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .model-comparison-card {
+    background: var(--if-surface);
+    border: 1px solid var(--if-border);
+    border-radius: var(--if-radius-lg);
+    padding: 16px;
+    position: relative;
+    transition: var(--if-transition);
+  }
+  .model-comparison-card.best {
+    border-color: var(--if-success);
+    background: var(--if-success-light);
+  }
+  .model-comparison-card.best::before {
+    content: '⭐ Best Model';
+    position: absolute;
+    top: -10px;
+    left: 16px;
+    background: var(--if-success);
+    color: white;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 99px;
+  }
+
+  /* Stage spinner */
+  .stage-spinner {
+    width: 18px;
+    height: 18px;
+    border: 2px solid var(--if-primary-light);
+    border-top-color: var(--if-primary);
+    border-radius: 50%;
+    animation: if-spin 0.8s linear infinite;
+    flex-shrink: 0;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="max-width: 900px; margin: 0 auto;">
+
+  <!-- ══ HERO ══════════════════════════════════════════════════════════ -->
+  <div class="automl-hero">
+    <div class="automl-badge">✨ AutoML</div>
+    <h1 class="automl-hero-title">One-Click ML Pipeline</h1>
+    <p class="automl-hero-subtitle">
+      AutoML analyzes your dataset and automatically applies the best preprocessing,
+      feature engineering, and model selection — fully end-to-end with no manual steps.
+    </p>
+    <div style="margin-top:20px;position:relative;z-index:1;">
+      <a href="{% url 'upload_dataset' %}" class="if-btn if-btn-secondary" style="background:rgba(255,255,255,.1);color:rgba(255,255,255,.85);border-color:rgba(255,255,255,.2);">
+        ← Manual Pipeline
+      </a>
+      <a href="{% url 'model_training' %}" class="if-btn if-btn-secondary" style="background:rgba(255,255,255,.1);color:rgba(255,255,255,.85);border-color:rgba(255,255,255,.2);margin-left:8px;">
+        🤖 Train Models Only
+      </a>
+    </div>
+  </div>
+
+  <!-- ══ ERROR BANNER ══════════════════════════════════════════════════ -->
+  {% if error %}
+  <div class="if-alert if-alert-danger">
+    <span class="if-alert-icon">❌</span>
+    <div class="if-alert-content">
+      <div class="if-alert-title">AutoML Failed</div>
+      <div class="if-alert-body">{{ error }}</div>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- ══ RESULTS (shown after completion) ══════════════════════════════ -->
+  {% if results and completed %}
+  <div id="automl-results">
+
+    <div class="if-alert if-alert-success" style="margin-bottom:20px;">
+      <span class="if-alert-icon">✅</span>
+      <div class="if-alert-content">
+        <div class="if-alert-title">AutoML Complete!</div>
+        <div class="if-alert-body">
+          Best model: <strong>{{ results.best_model }}</strong> |
+          Task: <strong>{{ results.task_type|title }}</strong>
+        </div>
+      </div>
+    </div>
+
+    <!-- Key Metrics -->
+    <div class="results-grid">
+      <div class="result-metric">
+        <div style="font-size:28px;margin-bottom:4px;">🎯</div>
+        <div class="result-metric-value">{{ results.profile.n_rows|default:"—" }}</div>
+        <div class="result-metric-label">Rows Processed</div>
+      </div>
+      <div class="result-metric">
+        <div style="font-size:28px;margin-bottom:4px;">📊</div>
+        <div class="result-metric-value">{{ results.selection_report.n_selected|default:"—" }}</div>
+        <div class="result-metric-label">Features Selected</div>
+      </div>
+      <div class="result-metric">
+        <div style="font-size:28px;margin-bottom:4px;">🤖</div>
+        <div class="result-metric-value">{{ results.model_results|length }}</div>
+        <div class="result-metric-label">Models Trained</div>
+      </div>
+      {% if results.task_type == 'classification' %}
+      <div class="result-metric">
+        <div style="font-size:28px;margin-bottom:4px;">📈</div>
+        {% for m in results.model_results %}{% if m.name == results.best_model %}
+        <div class="result-metric-value" style="color:var(--if-success);">{{ m.f1 }}%</div>
+        {% endif %}{% endfor %}
+        <div class="result-metric-label">Best F1 Score</div>
+      </div>
+      {% else %}
+      <div class="result-metric">
+        <div style="font-size:28px;margin-bottom:4px;">📈</div>
+        {% for m in results.model_results %}{% if m.name == results.best_model %}
+        <div class="result-metric-value" style="color:var(--if-success);">{{ m.r2 }}%</div>
+        {% endif %}{% endfor %}
+        <div class="result-metric-label">Best R² Score</div>
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- Model Comparison -->
+    <div class="if-card" style="margin-bottom:20px;">
+      <div class="if-card-header">
+        <span style="font-size:18px;">🏆</span>
+        <div class="if-card-title">Model Comparison</div>
+      </div>
+      <div class="if-card-body">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;">
+          {% for model in results.model_results %}
+          <div class="model-comparison-card {% if model.name == results.best_model %}best{% endif %}">
+            <div style="font-weight:700;color:var(--if-text);margin-bottom:10px;padding-top:{% if model.name == results.best_model %}6px{% else %}0{% endif %};">
+              {{ model.name }}
+            </div>
+            {% if results.task_type == 'classification' %}
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+              <div>
+                <div style="font-size:10px;color:var(--if-text-muted);font-weight:600;">ACCURACY</div>
+                <div style="font-size:18px;font-weight:800;color:var(--if-primary);">{{ model.accuracy }}%</div>
+              </div>
+              <div>
+                <div style="font-size:10px;color:var(--if-text-muted);font-weight:600;">F1 SCORE</div>
+                <div style="font-size:18px;font-weight:800;color:var(--if-secondary);">{{ model.f1 }}%</div>
+              </div>
+            </div>
+            {% else %}
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;">
+              <div>
+                <div style="font-size:10px;color:var(--if-text-muted);font-weight:600;">R²</div>
+                <div style="font-size:16px;font-weight:800;color:var(--if-primary);">{{ model.r2 }}%</div>
+              </div>
+              <div>
+                <div style="font-size:10px;color:var(--if-text-muted);font-weight:600;">MAE</div>
+                <div style="font-size:14px;font-weight:700;color:var(--if-text);">{{ model.mae }}</div>
+              </div>
+              <div>
+                <div style="font-size:10px;color:var(--if-text-muted);font-weight:600;">RMSE</div>
+                <div style="font-size:14px;font-weight:700;color:var(--if-text);">{{ model.rmse }}</div>
+              </div>
+            </div>
+            {% endif %}
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Pipeline Summary -->
+    <div class="if-card" style="margin-bottom:20px;">
+      <div class="if-card-header">
+        <span style="font-size:18px;">📋</span>
+        <div class="if-card-title">Pipeline Summary</div>
+      </div>
+      <div class="if-card-body">
+        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;">
+          <div>
+            <div style="font-size:11px;color:var(--if-text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px;">Imputation</div>
+            <div style="margin-top:4px;">{{ results.imputation_report.columns_imputed }} columns imputed</div>
+          </div>
+          <div>
+            <div style="font-size:11px;color:var(--if-text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px;">Encoding</div>
+            <div style="margin-top:4px;">{{ results.encoding_report.columns_encoded }} columns encoded</div>
+          </div>
+          <div>
+            <div style="font-size:11px;color:var(--if-text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px;">Feature Selection</div>
+            <div style="margin-top:4px;">{{ results.selection_report.n_selected }} of {{ results.profile.n_features }} features selected</div>
+          </div>
+          <div>
+            <div style="font-size:11px;color:var(--if-text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px;">Scaling</div>
+            <div style="margin-top:4px;">{{ results.scaler_method|title }}Scaler</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Action Buttons -->
+    <div style="display:flex;gap:12px;flex-wrap:wrap;">
+      <a href="{% url 'predict' %}" class="if-btn if-btn-primary if-btn-lg">
+        🔮 Make Predictions
+      </a>
+      <a href="{% url 'generate_report' %}" class="if-btn if-btn-success if-btn-lg">
+        📄 View Full Report
+      </a>
+      <a href="{% url 'download_report_pdf' %}" class="if-btn if-btn-secondary if-btn-lg">
+        ⬇️ Download PDF
+      </a>
+    </div>
+
+  </div><!-- /automl-results -->
+
+  {% else %}
+  <!-- ══ SETUP FORM ══════════════════════════════════════════════════════ -->
+  <div style="display:grid;grid-template-columns:1fr 320px;gap:24px;align-items:start;" id="automl-setup">
+
+    <!-- Left: Form -->
+    <div>
+      {% if not columns %}
+      <div class="if-alert if-alert-warning">
+        <span class="if-alert-icon">⚠️</span>
+        <div class="if-alert-content">
+          <div class="if-alert-title">No Dataset Loaded</div>
+          <div class="if-alert-body">
+            Please <a href="{% url 'upload_dataset' %}">upload a dataset</a> first before running AutoML.
+          </div>
+        </div>
+      </div>
+      {% else %}
+      <div class="if-card">
+        <div class="if-card-header">
+          <span style="font-size:20px;">🎯</span>
+          <div class="if-card-title">AutoML Configuration</div>
+        </div>
+        <div class="if-card-body">
+          <form method="POST" id="automl-form">
+            {% csrf_token %}
+
+            <div class="if-form-group">
+              <label class="if-form-label if-form-label-req" for="automl-target">Target Column</label>
+              <select class="if-select" name="target" id="automl-target" required>
+                <option value="">— Select the column to predict —</option>
+                {% for col in columns %}
+                <option value="{{ col }}">{{ col }}</option>
+                {% endfor %}
+              </select>
+              <div class="if-form-hint">The column AutoML will learn to predict. This should be your output/label column.</div>
+            </div>
+
+            <div style="background:var(--if-surface-2);border:1px solid var(--if-border);border-radius:var(--if-radius-md);padding:16px;margin-bottom:20px;">
+              <div style="font-size:12px;font-weight:700;color:var(--if-text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px;">
+                What AutoML will do automatically:
+              </div>
+              <div style="display:grid;gap:8px;">
+                {% for step in automl_steps %}
+                <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--if-text);">
+                  <span style="color:var(--if-success);">✓</span>
+                  {{ step }}
+                </div>
+                {% empty %}
+                <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--if-text);"><span style="color:var(--if-success);">✓</span> 🧹 Intelligent missing value imputation</div>
+                <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--if-text);"><span style="color:var(--if-success);">✓</span> 🔢 Cardinality-based feature encoding</div>
+                <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--if-text);"><span style="color:var(--if-success);">✓</span> 🎯 Correlation-based feature selection</div>
+                <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--if-text);"><span style="color:var(--if-success);">✓</span> ⚖️ Optimal scaling method</div>
+                <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--if-text);"><span style="color:var(--if-success);">✓</span> 🤖 Train top 3 recommended models</div>
+                <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--if-text);"><span style="color:var(--if-success);">✓</span> 📊 Evaluate and select best model</div>
+                <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--if-text);"><span style="color:var(--if-success);">✓</span> 💾 Save pipeline for predictions</div>
+                {% endfor %}
+              </div>
+            </div>
+
+            <div style="display:flex;gap:12px;align-items:center;">
+              <button type="submit" class="if-btn if-btn-primary if-btn-xl" id="automl-submit-btn">
+                ⚡ Run AutoML
+              </button>
+              <div style="font-size:12px;color:var(--if-text-muted);">
+                Dataset: {{ n_rows|default:"?" }} rows × {{ n_cols|default:"?" }} columns
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- Right: Info panel -->
+    <div>
+      <div class="if-card" style="margin-bottom:16px;">
+        <div class="if-card-header">
+          <span>⚡</span>
+          <div class="if-card-title">AutoML vs Manual</div>
+        </div>
+        <div class="if-card-body" style="font-size:13px;">
+          <div style="display:grid;gap:10px;">
+            <div>
+              <div style="font-weight:700;color:var(--if-success);margin-bottom:2px;">⚡ AutoML (This Page)</div>
+              <div style="color:var(--if-text-muted);">One click. Fully automated. Best for quick experiments and baselines.</div>
+            </div>
+            <hr class="if-divider">
+            <div>
+              <div style="font-weight:700;color:var(--if-primary);margin-bottom:2px;">🔧 Manual Pipeline</div>
+              <div style="color:var(--if-text-muted);">Full control over every step. Best for production models and custom tuning.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="if-card">
+        <div class="if-card-header">
+          <span>🤖</span>
+          <div class="if-card-title">Models Tried</div>
+        </div>
+        <div class="if-card-body" style="font-size:13px;">
+          <div style="display:grid;gap:6px;">
+            <div class="if-badge if-badge-primary" style="justify-content:flex-start;">🌳 Random Forest</div>
+            <div class="if-badge if-badge-secondary" style="justify-content:flex-start;">🚀 Gradient Boosting</div>
+            <div class="if-badge if-badge-neutral" style="justify-content:flex-start;">📏 Linear / Logistic Regression</div>
+          </div>
+          <div style="margin-top:12px;font-size:11px;color:var(--if-text-muted);">
+            Top 3 recommended models are trained and the best one (by F1 / R²) is selected automatically.
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /automl-setup -->
+  {% endif %}
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+  // Enhance submit button with loading state
+  const form = document.getElementById('automl-form');
+  const btn = document.getElementById('automl-submit-btn');
+
+  if (form && btn) {
+    form.addEventListener('submit', function(e) {
+      const target = document.getElementById('automl-target').value;
+      if (!target) {
+        e.preventDefault();
+        IF.toast({ type: 'warning', title: 'Select a target column', body: 'Please choose the column to predict.' });
+        return;
+      }
+
+      // Show loading state
+      btn.innerHTML = '<span style="width:16px;height:16px;border:2px solid rgba(255,255,255,.4);border-top-color:white;border-radius:50%;animation:if-spin .7s linear infinite;display:inline-block;"></span> Running AutoML...';
+      btn.disabled = true;
+      btn.style.opacity = '0.8';
+
+      IF.toast({ type: 'info', title: '⚡ AutoML Started', body: 'Processing your dataset...', duration: 8000 });
+    });
+  }
+})();
+</script>
+{% endblock %}

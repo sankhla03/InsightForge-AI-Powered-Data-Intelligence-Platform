@@ -1,0 +1,282 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Dataset Visualization{% endblock %}
+{% block page_title %}Dataset Visualization Workspace{% endblock %}
+
+{% block extra_css %}
+<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+<style>
+  .if-viz-card {
+    background: var(--if-surface);
+    border: 1px solid var(--if-border);
+    border-radius: var(--if-radius-lg);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+    margin-bottom: 24px;
+    overflow: hidden;
+  }
+  .if-viz-card-header {
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--if-border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--if-surface);
+  }
+  .if-viz-card-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--if-text);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0;
+  }
+  .if-viz-card-sub {
+    font-size: 13px;
+    color: var(--if-text-muted);
+    margin-top: 4px;
+  }
+  .if-viz-card-body {
+    padding: 24px;
+  }
+  .if-chart-container {
+    background: var(--if-surface-hover);
+    border: 1px solid var(--if-border);
+    border-radius: var(--if-radius-md);
+    padding: 16px;
+    margin-bottom: 20px;
+    width: 100%;
+    overflow-x: auto;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Page Header -->
+<div class="if-page-header" style="margin-bottom: 24px;">
+  <div class="if-flex-between" style="flex-wrap: wrap; gap: 12px;">
+    <div>
+      <h1 class="if-section-title" style="margin: 0;">InsightForge</h1>
+      <p class="if-section-sub" style="margin-top: 4px;">
+        Automated Data Analysis & Visualization Platform
+      </p>
+    </div>
+    <div class="if-flex">
+      <a href="{% url 'feature_selection' %}" class="if-btn if-btn-primary if-btn-lg">
+        <span>Continue to Feature Selection</span>
+        <i data-lucide="arrow-right" class="if-icon"></i>
+      </a>
+    </div>
+  </div>
+</div>
+
+<!-- Main Visualization Dashboard Card -->
+<div class="if-viz-card">
+  <div class="if-viz-card-header">
+    <div>
+      <h2 class="if-viz-card-title">
+        <span>📊 Visualization Dashboard</span>
+      </h2>
+      <div class="if-viz-card-sub">Generate interactive charts from your dataset</div>
+    </div>
+    <span class="if-badge if-badge-primary">Interactive Workspace</span>
+  </div>
+  
+  <div class="if-viz-card-body">
+    <form method="post" id="chartForm" action="/visualization/" class="if-flex-col" style="gap: 20px;">
+      {% csrf_token %}
+      <input type="hidden" name="_cb" value="{{ timestamp }}" />
+
+      <!-- Chart Type Dropdown -->
+      <div class="if-form-group" style="max-width: 500px;">
+        <label class="if-form-label if-form-label-req" for="chartType">Chart Type</label>
+        <select name="chart_type" id="chartType" class="if-select" onchange="updateFields()" required>
+          <option value="">-- Select Chart --</option>
+          <option value="histogram" {% if saved_chart_type == 'histogram' %}selected{% endif %}>Histogram</option>
+          <option value="boxplot" {% if saved_chart_type == 'boxplot' %}selected{% endif %}>Boxplot</option>
+          <option value="pie" {% if saved_chart_type == 'pie' %}selected{% endif %}>Pie Chart</option>
+          <option value="pairplot" {% if saved_chart_type == 'pairplot' %}selected{% endif %}>Pairplot</option>
+        </select>
+      </div>
+
+      <!-- Dynamic Field: Numerical Column (Histogram & Boxplot) -->
+      <div id="numColDiv" class="if-form-group" style="display:none; max-width: 500px;">
+        <label class="if-form-label if-form-label-req" for="numColSelect">X / Numeric Column</label>
+        <select name="num_col" id="numColSelect" class="if-select">
+          {% for col in numeric_cols %}
+            <option value="{{ col }}" {% if col == saved_num_col %}selected{% endif %}>{{ col }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <!-- Dynamic Field: Bins (Histogram) -->
+      <div id="binsDiv" class="if-form-group" style="display:none; max-width: 300px;">
+        <label class="if-form-label" for="binsInput">Number of Bins</label>
+        <input type="number" name="bins" id="binsInput" class="if-input" min="5" max="100" value="{{ saved_bins|default:'20' }}">
+      </div>
+
+      <!-- Dynamic Field: Category Column (Pie Chart) -->
+      <div id="pieCatDiv" class="if-form-group" style="display:none; max-width: 500px;">
+        <label class="if-form-label if-form-label-req" for="pieCatSelect">Category Column</label>
+        <select name="cat_col" id="pieCatSelect" class="if-select">
+          {% for col in categorical_cols %}
+            <option value="{{ col }}" {% if col == saved_cat_col %}selected{% endif %}>{{ col }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <!-- Dynamic Field: Group / Category (Boxplot Optional Grouping) -->
+      <div id="boxCatDiv" class="if-form-group" style="display:none; max-width: 500px;">
+        <label class="if-form-label" for="boxCatSelect">Optional Group / Category</label>
+        <select name="cat_col" id="boxCatSelect" class="if-select">
+          <option value="">None (Single Series)</option>
+          {% for col in categorical_cols %}
+            <option value="{{ col }}" {% if col == saved_cat_col %}selected{% endif %}>{{ col }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <!-- Dynamic Field: Hue (Pairplot Optional Hue) -->
+      <div id="hueDiv" class="if-form-group" style="display:none; max-width: 500px;">
+        <label class="if-form-label" for="hueSelect">Hue (optional)</label>
+        <select name="hue" id="hueSelect" class="if-select">
+          <option value="">None</option>
+          {% for col in categorical_cols %}
+            <option value="{{ col }}" {% if col == saved_hue %}selected{% endif %}>{{ col }}</option>
+          {% endfor %}
+          {% for col in all_cols %}
+            {% if col not in categorical_cols %}
+            <option value="{{ col }}" {% if col == saved_hue %}selected{% endif %}>{{ col }}</option>
+            {% endif %}
+          {% endfor %}
+        </select>
+      </div>
+
+      <!-- Submit Button -->
+      <div style="margin-top: 10px;">
+        <button type="submit" class="if-btn if-btn-primary if-btn-lg">
+          <i data-lucide="bar-chart-2" class="if-icon"></i>
+          <span>📊 Generate Chart</span>
+        </button>
+      </div>
+
+    </form>
+  </div>
+</div>
+
+<!-- Generated Chart Section -->
+{% if plot or generated_charts %}
+<div class="if-viz-card" id="generatedChartsSection">
+  <div class="if-viz-card-header">
+    <h2 class="if-viz-card-title">
+      <span>📊 Generated Chart</span>
+    </h2>
+    <form method="post" action="/visualization/" style="margin:0;">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="clear_charts">
+      <button type="submit" class="if-btn if-btn-ghost if-btn-sm" style="color: var(--if-danger);">
+        <i data-lucide="trash-2" class="if-icon"></i>
+        <span>Clear Charts</span>
+      </button>
+    </form>
+  </div>
+
+  <div class="if-viz-card-body">
+    <!-- Active / Most Recently Generated Plot -->
+    {% if plot %}
+    <div style="margin-bottom: 28px;">
+      {% if chart_title %}
+      <h3 style="font-size: 16px; font-weight: 700; margin-bottom: 14px; color: var(--if-text);">
+        {{ chart_title }}
+      </h3>
+      {% endif %}
+      <div class="if-chart-container" style="min-height: 480px;">
+        {{ plot|safe }}
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- History of Previously Generated Charts -->
+    {% if generated_charts %}
+    {% for item in generated_charts %}
+    {% if item.plot != plot %}
+    <div style="margin-bottom: 28px; border-top: 1px solid var(--if-border); padding-top: 20px;">
+      <h3 style="font-size: 15px; font-weight: 700; margin-bottom: 14px; color: var(--if-text-muted);">
+        {{ item.title }}
+      </h3>
+      <div class="if-chart-container" style="min-height: 440px;">
+        {{ item.plot|safe }}
+      </div>
+    </div>
+    {% endif %}
+    {% endfor %}
+    {% endif %}
+
+  </div>
+</div>
+{% endif %}
+
+<!-- Bottom Action Bar -->
+<div class="if-viz-card" style="background: var(--if-surface-hover);">
+  <div class="if-viz-card-body if-flex-between" style="flex-wrap: wrap; gap: 16px;">
+    <div>
+      <h3 style="font-size: 16px; font-weight: 700; margin: 0; color: var(--if-text);">
+        Ready to proceed with feature engineering?
+      </h3>
+      <p style="font-size: 13px; color: var(--if-text-muted); margin: 4px 0 0;">
+        Proceed to feature selection using the processed dataset.
+      </p>
+    </div>
+    <a href="{% url 'feature_selection' %}" class="if-btn if-btn-primary if-btn-lg">
+      <span>Continue to Feature Selection</span>
+      <i data-lucide="arrow-right" class="if-icon"></i>
+    </a>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  function updateFields() {
+    const chart = document.getElementById("chartType").value;
+    
+    // Hide all dynamic control divs
+    document.getElementById("numColDiv").style.display = "none";
+    document.getElementById("binsDiv").style.display = "none";
+    document.getElementById("pieCatDiv").style.display = "none";
+    document.getElementById("boxCatDiv").style.display = "none";
+    document.getElementById("hueDiv").style.display = "none";
+
+    // Disable inputs inside hidden divs so unneeded fields aren't submitted
+    document.getElementById("pieCatSelect").disabled = true;
+    document.getElementById("boxCatSelect").disabled = true;
+
+    if (chart === "histogram") {
+      document.getElementById("numColDiv").style.display = "block";
+      document.getElementById("binsDiv").style.display = "block";
+    } else if (chart === "boxplot") {
+      document.getElementById("numColDiv").style.display = "block";
+      document.getElementById("boxCatDiv").style.display = "block";
+      document.getElementById("boxCatSelect").disabled = false;
+    } else if (chart === "pie") {
+      document.getElementById("pieCatDiv").style.display = "block";
+      document.getElementById("pieCatSelect").disabled = false;
+    } else if (chart === "pairplot") {
+      document.getElementById("hueDiv").style.display = "block";
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', function() {
+    updateFields();
+  });
+
+  window.addEventListener('resize', function() {
+    if (typeof Plotly !== 'undefined') {
+      document.querySelectorAll('.js-plotly-plot').forEach(function(p) {
+        Plotly.Plots.resize(p);
+      });
+    }
+  });
+</script>
+{% endblock %}

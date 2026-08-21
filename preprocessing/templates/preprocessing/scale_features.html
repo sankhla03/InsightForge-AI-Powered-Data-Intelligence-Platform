@@ -1,0 +1,191 @@
+{% extends "base.html" %}
+{% load static %}
+{% load custom_filters %}
+
+{% block title %}Feature Scaling{% endblock %}
+{% block page_title %}Feature Scaling & Normalization{% endblock %}
+
+{% block extra_css %}
+<style>
+  .scaling-option { border: 1.5px solid var(--if-border); border-radius: var(--if-radius-md); padding: 18px; cursor: pointer; transition: var(--if-transition-fast); background: var(--if-surface); display: flex; flex-direction: column; gap: 6px; }
+  .scaling-option:hover { border-color: var(--if-primary); }
+  .scaling-option input[type="radio"] { display: none; }
+  .scaling-option.selected { border-color: var(--if-primary); background: var(--if-primary-light); }
+  .feature-tag { display: inline-flex; align-items: center; padding: 3px 10px; background: var(--if-surface-2); border: 1px solid var(--if-border); border-radius: var(--if-radius-full); font-size: 12px; font-weight: 500; }
+  .feature-tag.target { background: var(--if-success-light); color: var(--if-success); border-color: var(--if-success-light); font-weight: 700; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="if-page-header">
+  <div class="if-flex-between">
+    <div>
+      <h1 class="if-section-title">Feature Scaling</h1>
+      <p class="if-section-sub">Standardize or normalize feature distributions prior to model training.</p>
+    </div>
+    <div class="if-flex">
+      <a href="{% url 'model_training' %}" class="if-btn if-btn-primary">
+        <span>Proceed to Model Training</span>
+        <i data-lucide="arrow-right" class="if-icon"></i>
+      </a>
+    </div>
+  </div>
+</div>
+
+<!-- Info Card -->
+<div class="if-card" style="margin-bottom: 24px;">
+  <div class="if-card-header">
+    <i data-lucide="info" class="if-icon-lg" style="color: var(--if-primary);"></i>
+    <h2 class="if-card-title">Pipeline Context</h2>
+  </div>
+  <div class="if-card-body">
+    <div class="if-alert if-alert-info" style="margin-bottom: 16px;">
+      <i data-lucide="layers" class="if-alert-icon"></i>
+      <div class="if-alert-content">
+        <div class="if-alert-title">Features Scope</div>
+        <div class="if-alert-body">Only the <strong>{{ n_features }}</strong> selected features will be scaled. Target variable <strong>"{{ target_col }}"</strong> is excluded from scaling.</div>
+      </div>
+    </div>
+
+    <div class="if-flex" style="flex-wrap: wrap; gap: 8px; margin-bottom: 16px;">
+      {% for feat in selected_features %}
+        <span class="feature-tag"><i data-lucide="check" class="if-icon-sm" style="color: var(--if-success); margin-right: 4px;"></i> {{ feat }}</span>
+      {% endfor %}
+      <span class="feature-tag target"><i data-lucide="target" class="if-icon-sm" style="margin-right: 4px;"></i> {{ target_col }} (Target)</span>
+    </div>
+
+    <div style="font-size: 13px; color: var(--if-text-muted);">
+      Dataset stats: <strong>{{ n_samples }}</strong> samples × <strong>{{ n_numeric_features }}</strong> numeric feature columns
+    </div>
+  </div>
+</div>
+
+<!-- Scaling Selection Form Card -->
+<div class="if-card" style="margin-bottom: 24px;">
+  <div class="if-card-header">
+    <i data-lucide="sliders" class="if-icon-lg" style="color: var(--if-primary);"></i>
+    <h2 class="if-card-title">Choose Scaling Estimator</h2>
+  </div>
+  <div class="if-card-body">
+    <form method="post">
+      {% csrf_token %}
+
+      <div class="if-grid-3" style="margin-bottom: 24px;">
+        <label class="scaling-option {% if method == 'standard' or not method %}selected{% endif %}" id="option-standard">
+          <input type="radio" name="scaling_method" value="standard" {% if method == 'standard' or not method %}checked{% endif %}>
+          <div style="display: flex; align-items: center; justify-content: space-between;">
+            <strong style="color: var(--if-text);">StandardScaler</strong>
+            {% if recommended_method == 'standard' %}
+            <span class="if-badge if-badge-success">Recommended</span>
+            {% endif %}
+          </div>
+          <div style="font-size: 12px; color: var(--if-text-muted); line-height: 1.5;">Standardizes features by removing mean and scaling to unit variance (mean=0, std=1). Best for SVM, Logistic Regression, Linear Regression.</div>
+        </label>
+
+        <label class="scaling-option {% if method == 'minmax' %}selected{% endif %}" id="option-minmax">
+          <input type="radio" name="scaling_method" value="minmax" {% if method == 'minmax' %}checked{% endif %}>
+          <div style="display: flex; align-items: center; justify-content: space-between;">
+            <strong style="color: var(--if-text);">MinMaxScaler</strong>
+            {% if recommended_method == 'minmax' %}
+            <span class="if-badge if-badge-success">Recommended</span>
+            {% endif %}
+          </div>
+          <div style="font-size: 12px; color: var(--if-text-muted); line-height: 1.5;">Transforms features to a bounded range [0, 1]. Ideal for neural networks, distance metrics (KNN), and bounded inputs.</div>
+        </label>
+
+        <label class="scaling-option {% if method == 'robust' %}selected{% endif %}" id="option-robust">
+          <input type="radio" name="scaling_method" value="robust" {% if method == 'robust' %}checked{% endif %}>
+          <div style="display: flex; align-items: center; justify-content: space-between;">
+            <strong style="color: var(--if-text);">RobustScaler</strong>
+            {% if recommended_method == 'robust' %}
+            <span class="if-badge if-badge-success">Recommended</span>
+            {% endif %}
+          </div>
+          <div style="font-size: 12px; color: var(--if-text-muted); line-height: 1.5;">Scales features using median and Interquartile Range (IQR). Resilient to remaining outliers.</div>
+        </label>
+      </div>
+
+      <div class="if-flex-between">
+        <a href="{% url 'feature_selection' %}" class="if-btn if-btn-secondary">
+          <i data-lucide="arrow-left" class="if-icon"></i>
+          <span>Back to Feature Selection</span>
+        </a>
+
+        <div class="if-flex">
+          <a href="{% url 'model_training' %}" class="if-btn if-btn-ghost">
+            <span>Skip Scaling</span>
+          </a>
+          <button type="submit" class="if-btn if-btn-success if-btn-lg">
+            <i data-lucide="sliders" class="if-icon"></i>
+            <span>Apply Scaling & Continue</span>
+          </button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Scaled Data Preview -->
+{% if scaled_rows %}
+<div class="if-card" style="margin-bottom: 24px;">
+  <div class="if-card-header">
+    <i data-lucide="table" class="if-icon-lg" style="color: var(--if-primary);"></i>
+    <h2 class="if-card-title">Scaled Dataset Table</h2>
+    <span class="if-badge if-badge-success">Scaling Applied</span>
+  </div>
+  <div class="if-card-body">
+    <div class="if-table-wrap" style="margin-bottom: 20px;">
+      <table class="if-table" id="scaled-table">
+        <thead>
+          <tr>
+            <th style="width: 50px;">#</th>
+            {% for col in scaling_info.feature_columns %}
+            <th data-sortable>{{ col }}</th>
+            {% endfor %}
+            <th>{{ scaling_info.target_column }} (Target)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in scaled_rows %}
+          <tr>
+            <td style="color: var(--if-text-muted);">{{ row.index }}</td>
+            {% for col in scaling_info.feature_columns %}
+            <td style="font-family: var(--if-font-mono);">{{ row.values|dict_get:col }}</td>
+            {% endfor %}
+            <td style="font-weight: 700; color: var(--if-success);">{{ row.target }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="if-flex-between" style="justify-content: flex-end;">
+      <a href="{% url 'model_training' %}" class="if-btn if-btn-success if-btn-lg">
+        <span>Proceed to Model Training</span>
+        <i data-lucide="arrow-right" class="if-icon"></i>
+      </a>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  document.querySelectorAll('.scaling-option').forEach(option => {
+    option.addEventListener('click', function() {
+      document.querySelectorAll('.scaling-option').forEach(opt => opt.classList.remove('selected'));
+      this.classList.add('selected');
+      const radio = this.querySelector('input[type="radio"]');
+      if (radio) radio.checked = true;
+    });
+  });
+
+  document.addEventListener('DOMContentLoaded', function() {
+    if (document.getElementById('scaled-table')) {
+      IF.enhanceTable('scaled-table', { pageSize: 15, searchable: true, sortable: true });
+    }
+  });
+</script>
+{% endblock %}

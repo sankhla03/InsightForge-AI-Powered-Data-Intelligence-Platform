@@ -1,0 +1,333 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Outlier Handling{% endblock %}
+{% block page_title %}Outlier Handling (IQR Method){% endblock %}
+
+{% block extra_css %}
+<style>
+  .outlier-cell { background-color: var(--if-danger-light) !important; color: var(--if-danger) !important; font-weight: 600; }
+  .capped-cell { background-color: var(--if-warning-light) !important; }
+  .capped-cell input { background: transparent; border: 1px solid var(--if-warning); border-radius: 4px; padding: 4px 8px; width: 100%; color: var(--if-text); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="if-page-header">
+  <div class="if-flex-between">
+    <div>
+      <h1 class="if-section-title">Outlier Handling (IQR)</h1>
+      <p class="if-section-sub">Detect and handle numerical anomalies using the Interquartile Range (IQR) method.</p>
+    </div>
+    <div class="if-flex">
+      <a href="{% url 'label_noise' %}" class="if-btn if-btn-primary">
+        <span>Continue to Label Noise</span>
+        <i data-lucide="arrow-right" class="if-icon"></i>
+      </a>
+    </div>
+  </div>
+</div>
+
+<!-- Stat Cards -->
+<div class="if-stat-grid" style="margin-bottom: 24px;">
+  <div class="if-metric-card">
+    <div class="if-metric-icon"><i data-lucide="database" class="if-icon-lg"></i></div>
+    <div class="if-metric-value">{{ total_rows }}</div>
+    <div class="if-metric-label">Total Rows</div>
+  </div>
+
+  <div class="if-metric-card" style="border-left: 3px solid {% if outlier_count > 0 %}var(--if-warning){% else %}var(--if-success){% endif %};">
+    <div class="if-metric-icon"><i data-lucide="alert-triangle" class="if-icon-lg" style="color: {% if outlier_count > 0 %}var(--if-warning){% else %}var(--if-success){% endif %};"></i></div>
+    <div class="if-metric-value" style="color: {% if outlier_count > 0 %}var(--if-warning){% else %}var(--if-success){% endif %};">{{ outlier_count }}</div>
+    <div class="if-metric-label">Outliers Detected</div>
+  </div>
+</div>
+
+{% if outlier_count > 0 %}
+<div class="if-card" style="margin-bottom: 24px;">
+  <div class="if-card-header">
+    <i data-lucide="eye" class="if-icon-lg" style="color: var(--if-primary);"></i>
+    <h2 class="if-card-title">Outlier Data Inspection</h2>
+    <button class="if-btn if-btn-secondary if-btn-sm" onclick="toggleOutliers()">
+      <i data-lucide="layers" class="if-icon-sm"></i>
+      <span>Toggle Outlier Rows</span>
+    </button>
+  </div>
+  <div class="if-card-body">
+    <div class="if-alert if-alert-warning">
+      <i data-lucide="info" class="if-alert-icon"></i>
+      <div class="if-alert-content">
+        <div class="if-alert-title">IQR Threshold Exceeded</div>
+        <div class="if-alert-body">Cells highlighted in red exceed 1.5×IQR from Q1/Q3 quartiles.</div>
+      </div>
+    </div>
+
+    <div id="outlierTableContainer" style="display: none; margin-top: 16px;">
+      <div class="if-table-wrap">
+        <table class="if-table" id="outlierTable">
+          <thead id="outlierHead"></thead>
+          <tbody id="outlierBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% if removed %}
+  {% if method == "winsorized" %}
+    <div class="if-alert if-alert-success" style="margin-bottom: 20px;">
+      <i data-lucide="check-circle" class="if-alert-icon"></i>
+      <div class="if-alert-content">
+        <div class="if-alert-title">Outliers Capped (Winsorized)</div>
+        <div class="if-alert-body">Outliers were successfully capped at IQR boundary limits. You can fine-tune values below if needed.</div>
+      </div>
+    </div>
+
+    <div class="if-card" style="margin-bottom: 24px;">
+      <div class="if-card-header">
+        <i data-lucide="edit-3" class="if-icon-lg" style="color: var(--if-primary);"></i>
+        <h2 class="if-card-title">Capped Outliers (Editable)</h2>
+        <button class="if-btn if-btn-secondary if-btn-sm" onclick="toggleCappedData()">
+          <i data-lucide="table" class="if-icon-sm"></i>
+          <span>Toggle Capped Table</span>
+        </button>
+      </div>
+      <div class="if-card-body">
+        <div id="cappedTableContainer" style="display: none;">
+          <div class="if-table-wrap" style="margin-bottom: 16px;">
+            <table class="if-table" id="cappedTable">
+              <thead id="cappedHead"></thead>
+              <tbody id="cappedBody"></tbody>
+            </table>
+          </div>
+          <button class="if-btn if-btn-success" onclick="saveCappedData()">
+            <i data-lucide="save" class="if-icon"></i>
+            <span>Save Capped Adjustments</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  {% else %}
+    <div class="if-alert if-alert-success" style="margin-bottom: 20px;">
+      <i data-lucide="check-circle" class="if-alert-icon"></i>
+      <div class="if-alert-content">
+        <div class="if-alert-title">Outlier Rows Removed</div>
+        <div class="if-alert-body">Outlier records have been successfully purged from the session dataset.</div>
+      </div>
+    </div>
+  {% endif %}
+
+  <div class="if-flex" style="margin-top: 24px;">
+    <a href="{% url 'label_noise' %}" class="if-btn if-btn-primary if-btn-lg">
+      <span>Continue to Label Noise Handling</span>
+      <i data-lucide="arrow-right" class="if-icon"></i>
+    </a>
+  </div>
+{% else %}
+  {% if outlier_count > 0 %}
+  <div class="if-card">
+    <div class="if-card-header">
+      <i data-lucide="settings" class="if-icon-lg" style="color: var(--if-primary);"></i>
+      <h2 class="if-card-title">Select Outlier Resolution Strategy</h2>
+    </div>
+    <div class="if-card-body">
+      <form method="post" class="if-flex-col" style="gap: 16px;">
+        {% csrf_token %}
+        <div class="if-flex-between" style="padding: 16px; border: 1.5px solid var(--if-border); border-radius: var(--if-radius-md); background: var(--if-surface);">
+          <div>
+            <div style="font-weight: 700; color: var(--if-text);">Winsorization (IQR Capping)</div>
+            <div style="font-size: 13px; color: var(--if-text-muted);">Cap extreme values to the 1.5×IQR boundary without dropping rows. Recommended for regression datasets.</div>
+          </div>
+          <button type="submit" name="action" value="winsorize" class="if-btn if-btn-primary">
+            <i data-lucide="sliders" class="if-icon"></i>
+            <span>Cap Outliers (IQR)</span>
+          </button>
+        </div>
+
+        <div class="if-flex-between" style="padding: 16px; border: 1.5px solid var(--if-border); border-radius: var(--if-radius-md); background: var(--if-surface);">
+          <div>
+            <div style="font-weight: 700; color: var(--if-danger);">Purge Outlier Rows</div>
+            <div style="font-size: 13px; color: var(--if-text-muted);">Permanently remove rows containing identified outlier values. Use with caution for small datasets.</div>
+          </div>
+          <button type="submit" name="action" value="remove" class="if-btn if-btn-danger">
+            <i data-lucide="trash-2" class="if-icon"></i>
+            <span>Remove Outlier Rows</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+  {% else %}
+  <div class="if-empty-state">
+    <div class="if-empty-icon" style="color: var(--if-success); background: var(--if-success-light);">
+      <i data-lucide="check-circle-2" class="if-icon-lg"></i>
+    </div>
+    <div class="if-empty-title">Zero Outliers Detected</div>
+    <div class="if-empty-desc">All numerical variables fall within standard IQR distributions. No action is required.</div>
+    <a href="{% url 'label_noise' %}" class="if-btn if-btn-primary">
+      <span>Continue to Label Noise Handling</span>
+      <i data-lucide="arrow-right" class="if-icon"></i>
+    </a>
+  </div>
+  {% endif %}
+{% endif %}
+
+{% endblock %}
+
+{% block extra_js %}
+{% if outlier_count > 0 %}
+<script>
+  var outlierData = {{ outlier_data_json|safe }};
+  var outlierDetails = {{ outlier_details_json|safe }};
+
+  function toggleOutliers() {
+    var container = document.getElementById('outlierTableContainer');
+    if (container.style.display === 'none') {
+      container.style.display = 'block';
+      renderOutliers();
+    } else {
+      container.style.display = 'none';
+    }
+  }
+
+  function renderOutliers() {
+    var theadEl = document.getElementById('outlierHead');
+    var tbodyEl = document.getElementById('outlierBody');
+    if (!outlierData || outlierData.length === 0) return;
+
+    var columns = Object.keys(outlierData[0]);
+    var headerRow = '<tr>';
+    for (var i = 0; i < columns.length; i++) {
+      headerRow += '<th>' + escapeHtmlStr(columns[i]) + '</th>';
+    }
+    headerRow += '</tr>';
+    theadEl.innerHTML = headerRow;
+
+    var bodyContent = '';
+    for (var j = 0; j < outlierData.length; j++) {
+      var rowData = outlierData[j];
+      var rowIdx = rowData.index !== undefined && rowData.index !== null ? String(rowData.index) : String(j);
+      bodyContent += '<tr>';
+      for (var k = 0; k < columns.length; k++) {
+        var colName = columns[k];
+        var cellVal = rowData[colName];
+        if (cellVal === null || cellVal === undefined) cellVal = '';
+
+        var hasOutlier = false;
+        var rowOutliers = outlierDetails[rowIdx];
+        if (rowOutliers) {
+          for (var m = 0; m < rowOutliers.length; m++) {
+            if (rowOutliers[m].column === colName) { hasOutlier = true; break; }
+          }
+        }
+        var cls = hasOutlier ? 'outlier-cell' : '';
+        bodyContent += '<td class="' + cls + '">' + escapeHtmlStr(String(cellVal)) + '</td>';
+      }
+      bodyContent += '</tr>';
+    }
+    tbodyEl.innerHTML = bodyContent;
+  }
+
+  function escapeHtmlStr(text) {
+    if (text === null || text === undefined) return '';
+    var div = document.createElement('div');
+    div.textContent = String(text);
+    return div.innerHTML;
+  }
+</script>
+{% endif %}
+
+{% if removed and method == "winsorized" %}
+<script>
+  var cappedData = {{ capped_data_json|safe }};
+  var cappedDetails = {{ capped_details_json|default:"{}"|safe }};
+
+  function toggleCappedData() {
+    var container = document.getElementById('cappedTableContainer');
+    if (container.style.display === 'none') {
+      container.style.display = 'block';
+      renderCappedData();
+    } else {
+      container.style.display = 'none';
+    }
+  }
+
+  function renderCappedData() {
+    var theadEl = document.getElementById('cappedHead');
+    var tbodyEl = document.getElementById('cappedBody');
+    if (!cappedData || cappedData.length === 0) return;
+
+    var columns = Object.keys(cappedData[0]);
+    var headerRow = '<tr>';
+    for (var i = 0; i < columns.length; i++) {
+      headerRow += '<th>' + escapeHtmlStr(columns[i]) + '</th>';
+    }
+    headerRow += '</tr>';
+    theadEl.innerHTML = headerRow;
+
+    var bodyContent = '';
+    for (var j = 0; j < cappedData.length; j++) {
+      var rowIdx = String(j);
+      var detailRow = cappedDetails ? cappedDetails[rowIdx] : null;
+      bodyContent += '<tr>';
+      for (var k = 0; k < columns.length; k++) {
+        var colName = columns[k];
+        var cellVal = cappedData[j][colName];
+        if (cellVal === null || cellVal === undefined) cellVal = '';
+
+        var isCapped = false;
+        var origVal = '';
+        if (detailRow && detailRow[colName] !== undefined) {
+          var detail = detailRow[colName];
+          origVal = detail.original;
+          if (detail.original !== null && detail.capped !== null) {
+            if (Math.abs(detail.original - detail.capped) > 0.001) isCapped = true;
+          }
+        }
+        var cellCls = isCapped ? 'capped-cell' : '';
+        var cellTitle = isCapped ? 'Original: ' + (origVal !== null ? origVal.toFixed(2) : 'N/A') : '';
+        bodyContent += '<td class="' + cellCls + '" title="' + escapeHtmlStr(cellTitle) + '"><input type="text" value="' + escapeHtmlStr(String(cellVal)) + '" data-row="' + j + '" data-col="' + colName + '" onchange="updateCappedData(this)"></td>';
+      }
+      bodyContent += '</tr>';
+    }
+    tbodyEl.innerHTML = bodyContent;
+  }
+
+  function updateCappedData(inputEl) {
+    var row = parseInt(inputEl.getAttribute('data-row'), 10);
+    var col = inputEl.getAttribute('data-col');
+    var val = inputEl.value;
+    if (!isNaN(val) && val !== '') val = parseFloat(val);
+    cappedData[row][col] = val;
+  }
+
+  function saveCappedData() {
+    var formEl = document.createElement('form');
+    formEl.method = 'POST';
+    formEl.action = '';
+    
+    var csrfInput = document.createElement('input');
+    csrfInput.type = 'hidden';
+    csrfInput.name = 'csrfmiddlewaretoken';
+    csrfInput.value = '{{ csrf_token }}';
+    formEl.appendChild(csrfInput);
+
+    var dataInput = document.createElement('input');
+    dataInput.type = 'hidden';
+    dataInput.name = 'capped_data';
+    dataInput.value = JSON.stringify(cappedData);
+    formEl.appendChild(dataInput);
+
+    var actionInput = document.createElement('input');
+    actionInput.type = 'hidden';
+    actionInput.name = 'action';
+    actionInput.value = 'save_capped';
+    formEl.appendChild(actionInput);
+
+    document.body.appendChild(formEl);
+    formEl.submit();
+  }
+</script>
+{% endif %}
+{% endblock %}

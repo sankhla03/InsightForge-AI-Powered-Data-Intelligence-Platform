@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Real-Time Model Prediction{% endblock %}
+{% block page_title %}Real-Time Inference & Prediction{% endblock %}
+
+{% block content %}
+<div class="if-page-header">
+  <div class="if-flex-between">
+    <div>
+      <h1 class="if-section-title">Model Inference</h1>
+      <p class="if-section-sub">Input custom feature values to generate instant real-time predictions from your trained model.</p>
+    </div>
+    <div class="if-flex">
+      <a href="{% url 'generate_report' %}" class="if-btn if-btn-primary">
+        <span>Generate Final Report</span>
+        <i data-lucide="arrow-right" class="if-icon"></i>
+      </a>
+    </div>
+  </div>
+</div>
+
+<div class="if-grid" style="grid-template-columns: 1fr 360px; gap: 24px; align-items: start;">
+  <!-- Form Input Panel -->
+  <div class="if-card">
+    <div class="if-card-header">
+      <i data-lucide="sliders" class="if-icon-lg" style="color: var(--if-primary);"></i>
+      <h2 class="if-card-title">Feature Input Parameters</h2>
+      {% if is_classification %}
+        <span class="if-badge if-badge-primary">Classification Model</span>
+      {% else %}
+        <span class="if-badge if-badge-warning">Regression Model</span>
+      {% endif %}
+    </div>
+    <div class="if-card-body">
+      <form method="post" class="if-flex-col" style="gap: 16px;">
+        {% csrf_token %}
+
+        <div class="if-grid-2" style="gap: 16px;">
+          {% for feature in features %}
+          <div class="if-form-group">
+            <label class="if-form-label if-form-label-req" for="input-{{ feature }}">{{ feature }}</label>
+            <input type="number" step="any" id="input-{{ feature }}" name="{{ feature }}" class="if-input" placeholder="Enter {{ feature }}" required>
+          </div>
+          {% endfor %}
+        </div>
+
+        <div style="margin-top: 16px; display: flex; justify-content: flex-end;">
+          <button type="submit" class="if-btn if-btn-primary if-btn-lg">
+            <i data-lucide="play" class="if-icon"></i>
+            <span>Run Prediction</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Prediction Result Panel -->
+  <div class="if-card">
+    <div class="if-card-header">
+      <i data-lucide="zap" class="if-icon-lg" style="color: var(--if-primary);"></i>
+      <h2 class="if-card-title">Inference Output</h2>
+    </div>
+    <div class="if-card-body">
+      {% if prediction is not None %}
+        <div style="padding: 24px; background: var(--if-success-light); border: 1.5px solid var(--if-success); border-radius: var(--if-radius-md); text-align: center; margin-bottom: 20px;">
+          <div style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--if-success); margin-bottom: 6px;">{{ prediction_label }}</div>
+          <div style="font-size: 32px; font-weight: 800; color: var(--if-text); line-height: 1.1;">{{ prediction }}</div>
+          {% if probability %}
+            <div style="font-size: 13px; color: var(--if-text-muted); margin-top: 8px;">Confidence Score: <strong>{{ probability }}%</strong></div>
+          {% endif %}
+        </div>
+
+        <div class="if-flex-col" style="gap: 10px;">
+          <a href="{% url 'generate_report' %}" class="if-btn if-btn-success if-btn-block">
+            <i data-lucide="file-text" class="if-icon"></i>
+            <span>Generate Full Report</span>
+          </a>
+          <a href="{% url 'predict' %}" class="if-btn if-btn-secondary if-btn-block">
+            <i data-lucide="refresh-cw" class="if-icon"></i>
+            <span>New Prediction</span>
+          </a>
+        </div>
+      {% else %}
+        <div class="if-empty-state" style="padding: 36px 16px;">
+          <div class="if-empty-icon"><i data-lucide="play-circle" class="if-icon-lg"></i></div>
+          <div class="if-empty-title">Awaiting Inference</div>
+          <div class="if-empty-desc">Fill out feature input values on the left and click "Run Prediction" to compute instant model inference.</div>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

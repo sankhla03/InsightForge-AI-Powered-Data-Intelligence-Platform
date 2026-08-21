@@ -1,0 +1,902 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}ML Pipeline Report{% endblock %}
+{% block page_title %}Executive ML Pipeline Report{% endblock %}
+
+{% block extra_css %}
+<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+<style>
+  /* Report Layout Grid */
+  .report-layout {
+    display: grid;
+    grid-template-columns: 240px 1fr;
+    gap: 24px;
+    align-items: start;
+  }
+  @media (max-width: 992px) {
+    .report-layout {
+      grid-template-columns: 1fr;
+    }
+    .report-nav-card {
+      display: none;
+    }
+  }
+
+  /* Sticky Navigation Sidebar */
+  .report-nav-card {
+    position: sticky;
+    top: 84px;
+    background: var(--if-surface);
+    border: 1px solid var(--if-border);
+    border-radius: var(--if-radius-lg);
+    padding: 16px;
+  }
+  .report-nav-title {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--if-text-muted);
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--if-border);
+  }
+  .report-nav-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .report-nav-link {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--if-text-secondary);
+    text-decoration: none;
+    border-radius: var(--if-radius-sm);
+    transition: var(--if-transition-fast);
+  }
+  .report-nav-link:hover {
+    background: var(--if-surface-2);
+    color: var(--if-primary);
+  }
+
+  /* Report Sections */
+  .report-section {
+    margin-bottom: 28px;
+    scroll-margin-top: 84px;
+  }
+  .report-section-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 16px;
+    padding-bottom: 10px;
+    border-bottom: 1.5px solid var(--if-border);
+  }
+  .report-section-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    background: var(--if-primary-light);
+    color: var(--if-primary);
+    font-weight: 800;
+    font-size: 13px;
+    border-radius: var(--if-radius-sm);
+  }
+  .report-section-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--if-text);
+    margin: 0;
+  }
+
+  .status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 99px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+  }
+  .status-pill-success { background: rgba(5, 150, 105, 0.12); color: #059669; }
+  .status-pill-warning { background: rgba(217, 119, 6, 0.12); color: #d97706; }
+  .status-pill-neutral { background: var(--if-surface-3); color: var(--if-text-muted); }
+
+  .score-bar-bg {
+    width: 100%;
+    background: var(--if-surface-3);
+    height: 12px;
+    border-radius: 99px;
+    overflow: hidden;
+    margin-top: 4px;
+  }
+  .score-bar-fill {
+    height: 100%;
+    border-radius: 99px;
+    background: var(--if-primary);
+  }
+
+  .visual-card {
+    border: 1px solid var(--if-border);
+    border-radius: var(--if-radius-md);
+    padding: 16px;
+    background: var(--if-surface);
+  }
+  .visual-card-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--if-text);
+    margin-bottom: 4px;
+  }
+  .visual-card-desc {
+    font-size: 12px;
+    color: var(--if-text-muted);
+    margin-bottom: 12px;
+    line-height: 1.5;
+  }
+
+  @media print {
+    .if-sidebar, .if-topbar, .report-nav-card, .if-btn { display: none !important; }
+    .if-main { margin-left: 0 !important; padding: 0 !important; }
+    .report-layout { display: block !important; }
+    .if-card { box-shadow: none !important; border: 1px solid #ccc !important; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- Header & Export Actions -->
+<div class="if-page-header">
+  <div class="if-flex-between">
+    <div>
+      <div class="if-flex" style="gap: 8px; margin-bottom: 6px;">
+        <span class="status-pill status-pill-success">
+          <i data-lucide="check-circle-2" class="if-icon-sm"></i>
+          <span>{{ conclusion.status|default:"Complete" }}</span>
+        </span>
+        <span class="status-pill status-pill-neutral">
+          <i data-lucide="database" class="if-icon-sm"></i>
+          <span>{{ request.session.dataset_name|default:"Uploaded Dataset" }}</span>
+        </span>
+      </div>
+      <h1 class="if-section-title">InsightForge ML Pipeline Report</h1>
+      <p class="if-section-sub">Comprehensive technical audit covering data quality, feature engineering, visualizations, model benchmarking, and predictions.</p>
+    </div>
+    <div class="if-flex" style="gap: 10px;">
+      <a href="{% url 'saved_reports' %}" class="if-btn if-btn-secondary">
+        <i data-lucide="folder-archive" class="if-icon"></i>
+        <span>Saved Reports</span>
+      </a>
+      <a href="{% url 'download_report_pdf' %}" class="if-btn if-btn-primary">
+        <i data-lucide="download" class="if-icon"></i>
+        <span>Export PDF Report</span>
+      </a>
+    </div>
+  </div>
+</div>
+
+<div class="report-layout">
+  
+  <!-- Left Navigation Sidebar -->
+  <aside class="report-nav-card">
+    <div class="report-nav-title">Report Outline</div>
+    <ul class="report-nav-list">
+      <li><a href="#sec-exec" class="report-nav-link"><i data-lucide="zap" class="if-icon-sm"></i> Executive Summary</a></li>
+      <li><a href="#sec-dataset" class="report-nav-link"><i data-lucide="database" class="if-icon-sm"></i> Dataset Overview</a></li>
+      <li><a href="#sec-quality" class="report-nav-link"><i data-lucide="shield-check" class="if-icon-sm"></i> Data Quality Audit</a></li>
+      <li><a href="#sec-cleaning" class="report-nav-link"><i data-lucide="sparkles" class="if-icon-sm"></i> Data Cleaning</a></li>
+      <li><a href="#sec-outliers" class="report-nav-link"><i data-lucide="trending-up" class="if-icon-sm"></i> Outlier Analysis</a></li>
+      <li><a href="#sec-noise" class="report-nav-link"><i data-lucide="activity" class="if-icon-sm"></i> Label Noise</a></li>
+      <li><a href="#sec-features" class="report-nav-link"><i data-lucide="sliders" class="if-icon-sm"></i> Feature Selection</a></li>
+      <li><a href="#sec-scaling" class="report-nav-link"><i data-lucide="maximize-2" class="if-icon-sm"></i> Feature Scaling</a></li>
+      <li><a href="#sec-viz" class="report-nav-link"><i data-lucide="pie-chart" class="if-icon-sm"></i> Visual Insights</a></li>
+      <li><a href="#sec-model" class="report-nav-link"><i data-lucide="cpu" class="if-icon-sm"></i> Model Training</a></li>
+      <li><a href="#sec-eval" class="report-nav-link"><i data-lucide="award" class="if-icon-sm"></i> Model Evaluation</a></li>
+      <li><a href="#sec-prediction" class="report-nav-link"><i data-lucide="target" class="if-icon-sm"></i> Prediction & Inference</a></li>
+      <li><a href="#sec-findings" class="report-nav-link"><i data-lucide="check-square" class="if-icon-sm"></i> Key Findings</a></li>
+      <li><a href="#sec-pipeline" class="report-nav-link"><i data-lucide="git-commit" class="if-icon-sm"></i> Pipeline Status</a></li>
+    </ul>
+  </aside>
+
+  <!-- Right Report Body -->
+  <main>
+
+    <!-- 1. Executive Summary -->
+    <section id="sec-exec" class="report-section">
+      <div class="report-section-header">
+        <span class="report-section-num">1</span>
+        <h2 class="report-section-title">Executive Summary</h2>
+      </div>
+      <div class="if-card">
+        <div class="if-card-body">
+          <div class="if-grid-4" style="gap: 16px; margin-bottom: 20px;">
+            <div class="if-metric-card">
+              <div class="if-metric-value" style="font-size: 18px; font-weight: 800;">{{ request.session.dataset_name|default:"Uploaded Dataset" }}</div>
+              <div class="if-metric-label">Dataset Name</div>
+            </div>
+            <div class="if-metric-card">
+              <div class="if-metric-value" style="color: var(--if-primary);">{{ dataset.total_rows }} × {{ dataset.total_columns }}</div>
+              <div class="if-metric-label">Rows × Columns</div>
+            </div>
+            <div class="if-metric-card">
+              <div class="if-metric-value" style="font-size: 16px; font-weight: 700;">{{ features.target|default:request.session.target_column|default:"Not specified" }}</div>
+              <div class="if-metric-label">Target Variable</div>
+            </div>
+            <div class="if-metric-card">
+              <div class="if-metric-value" style="text-transform: capitalize; color: var(--if-info);">{{ models.task_type|default:"Not trained" }}</div>
+              <div class="if-metric-label">Problem Type</div>
+            </div>
+          </div>
+
+          <div class="if-grid-3" style="gap: 16px;">
+            <div class="if-metric-card" style="border-left: 3.5px solid var(--if-success);">
+              <div class="if-metric-value" style="color: var(--if-success); font-size: 20px;">{{ models.best_model|default:"Not trained" }}</div>
+              <div class="if-metric-label">Optimal Model</div>
+            </div>
+            <div class="if-metric-card" style="border-left: 3.5px solid var(--if-primary);">
+              <div class="if-metric-value" style="color: var(--if-primary);">
+                {% if selection.metric_value %}
+                  {{ selection.metric_value|floatformat:4 }}
+                {% else %}
+                  N/A
+                {% endif %}
+              </div>
+              <div class="if-metric-label">Top Metric ({{ selection.metric|default:"Score" }})</div>
+            </div>
+            <div class="if-metric-card" style="border-left: 3.5px solid var(--if-secondary);">
+              <div class="if-metric-value" style="color: var(--if-secondary);">{{ conclusion.completeness }}%</div>
+              <div class="if-metric-label">Pipeline Completeness</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. Dataset Overview -->
+    <section id="sec-dataset" class="report-section">
+      <div class="report-section-header">
+        <span class="report-section-num">2</span>
+        <h2 class="report-section-title">Dataset Overview</h2>
+      </div>
+      <div class="if-card">
+        <div class="if-card-body">
+          <div class="if-grid-4" style="margin-bottom: 20px;">
+            <div>
+              <span class="if-form-label">Total Observations</span>
+              <div style="font-weight: 700; font-size: 16px;">{{ dataset.total_rows }} rows</div>
+            </div>
+            <div>
+              <span class="if-form-label">Total Features</span>
+              <div style="font-weight: 700; font-size: 16px;">{{ dataset.total_columns }} columns</div>
+            </div>
+            <div>
+              <span class="if-form-label">Target Column</span>
+              <div style="font-weight: 700; font-size: 16px; color: var(--if-primary);">{{ features.target|default:request.session.target_column|default:"Not specified" }}</div>
+            </div>
+            <div>
+              <span class="if-form-label">Feature Count</span>
+              <div style="font-weight: 700; font-size: 16px;">{{ columns|length }} predictor features</div>
+            </div>
+          </div>
+
+          <h3 style="font-size: 14px; font-weight: 700; margin-bottom: 10px;">Dataset Sample Preview (Head Rows)</h3>
+          <div class="if-table-wrap">
+            {{ preview|safe }}
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. Data Quality Audit -->
+    <section id="sec-quality" class="report-section">
+      <div class="report-section-header">
+        <span class="report-section-num">3</span>
+        <h2 class="report-section-title">Data Quality Audit</h2>
+      </div>
+      <div class="if-card">
+        <div class="if-card-body">
+          <div class="if-table-wrap">
+            <table class="if-table">
+              <thead>
+                <tr>
+                  <th>Quality Dimension</th>
+                  <th>Metric / Detected</th>
+                  <th>Status</th>
+                  <th>Action Taken</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><strong>Missing Values</strong></td>
+                  <td>{{ dataset.missing_handled }} missing values</td>
+                  <td>
+                    {% if dataset.missing_handled > 0 %}
+                      <span class="status-pill status-pill-warning">Handled</span>
+                    {% else %}
+                      <span class="status-pill status-pill-success">Clean</span>
+                    {% endif %}
+                  </td>
+                  <td>Imputed numerical columns with mean and categorical columns with mode.</td>
+                </tr>
+                <tr>
+                  <td><strong>Duplicate Records</strong></td>
+                  <td>{{ dataset.duplicates }} duplicate rows</td>
+                  <td>
+                    {% if dataset.duplicates > 0 %}
+                      <span class="status-pill status-pill-warning">Purged</span>
+                    {% else %}
+                      <span class="status-pill status-pill-success">Clean</span>
+                    {% endif %}
+                  </td>
+                  <td>Exact row duplicates removed during initial data ingestion.</td>
+                </tr>
+                <tr>
+                  <td><strong>Outliers (IQR Audit)</strong></td>
+                  <td>{{ outliers.detected }} anomaly values</td>
+                  <td>
+                    {% if outliers.detected > 0 %}
+                      <span class="status-pill status-pill-warning">Handled</span>
+                    {% else %}
+                      <span class="status-pill status-pill-success">Clean</span>
+                    {% endif %}
+                  </td>
+                  <td>Detected via IQR limits; {{ outliers.rows_corrected }} rows capped/winsorized.</td>
+                </tr>
+                <tr>
+                  <td><strong>Label Noise</strong></td>
+                  <td>
+                    {% if request.session.noise_report %}
+                      {{ request.session.noise_report.noisy_rows }} rows ({{ request.session.noise_report.noise_percent }}%)
+                    {% else %}
+                      0 detected / Not analyzed
+                    {% endif %}
+                  </td>
+                  <td><span class="status-pill status-pill-success">Audited</span></td>
+                  <td>ML cross-validation label noise evaluation completed.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4. Data Cleaning Details -->
+    <section id="sec-cleaning" class="report-section">
+      <div class="report-section-header">
+        <span class="report-section-num">4</span>
+        <h2 class="report-section-title">Data Cleaning Details</h2>
+      </div>
+      <div class="if-card">
+        <div class="if-card-body">
+          <div class="if-grid-2" style="gap: 20px;">
+            <div>
+              <h3 style="font-size: 14px; font-weight: 700; margin-bottom: 8px;">Missing Values & Imputation</h3>
+              <p style="font-size: 13px; color: var(--if-text-muted); margin-bottom: 12px;">
+                Identified missing values across raw columns. Mean imputation was applied for continuous numeric variables, and mode imputation for discrete categorical features.
+              </p>
+              <div class="if-metric-card" style="text-align: left;">
+                <div style="font-size: 12px; color: var(--if-text-muted);">Total Missing Handled</div>
+                <div style="font-size: 24px; font-weight: 800; color: var(--if-primary);">{{ dataset.missing_handled }}</div>
+              </div>
+            </div>
+            <div>
+              <h3 style="font-size: 14px; font-weight: 700; margin-bottom: 8px;">Duplicate Rows Removal</h3>
+              <p style="font-size: 13px; color: var(--if-text-muted); margin-bottom: 12px;">
+                Purged redundant identical observation records to prevent data leakage between training and testing splits.
+              </p>
+              <div class="if-metric-card" style="text-align: left;">
+                <div style="font-size: 12px; color: var(--if-text-muted);">Clean Rows Retained</div>
+                <div style="font-size: 24px; font-weight: 800; color: var(--if-success);">{{ dataset.clean_rows }}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5. Outlier Analysis -->
+    <section id="sec-outliers" class="report-section">
+      <div class="report-section-header">
+        <span class="report-section-num">5</span>
+        <h2 class="report-section-title">Outlier Analysis</h2>
+      </div>
+      <div class="if-card">
+        <div class="if-card-body">
+          <div class="if-grid-3" style="gap: 16px; margin-bottom: 16px;">
+            <div class="if-metric-card">
+              <div class="if-metric-value" style="font-size: 18px; font-weight: 700;">{{ outliers.method|default:"IQR" }}</div>
+              <div class="if-metric-label">Detection Method</div>
+            </div>
+            <div class="if-metric-card">
+              <div class="if-metric-value" style="color: var(--if-warning);">{{ outliers.detected }}</div>
+              <div class="if-metric-label">Outliers Detected</div>
+            </div>
+            <div class="if-metric-card">
+              <div class="if-metric-value" style="color: var(--if-success);">{{ outliers.rows_corrected }}</div>
+              <div class="if-metric-label">Rows Corrected / Capped</div>
+            </div>
+          </div>
+          <p style="font-size: 13px; color: var(--if-text-muted); margin: 0;">
+            Outliers were identified using the Interquartile Range (\(1.5 \times \text{IQR}\)) method beyond the 25th and 75th percentiles. Winsorization capping was applied to limit extreme values without discarding valid row observations.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 6. Label Noise Handling -->
+    <section id="sec-noise" class="report-section">
+      <div class="report-section-header">
+        <span class="report-section-num">6</span>
+        <h2 class="report-section-title">Label Noise & Consistency</h2>
+      </div>
+      <div class="if-card">
+        <div class="if-card-body">
+          <div class="if-grid-2" style="gap: 20px;">
+            <div>
+              <span class="if-form-label">Noise Audit Status</span>
+              <div style="font-weight: 700; font-size: 15px; color: var(--if-text);">
+                {% if request.session.noise_report %}
+                  Noisy samples detected: {{ request.session.noise_report.noisy_rows }} ({{ request.session.noise_report.noise_percent }}%)
+                {% else %}
+                  No label noise detected or target is continuous regression.
+                {% endif %}
+              </div>
+            </div>
+            <div>
+              <span class="if-form-label">Target Column</span>
+              <div style="font-weight: 700; font-size: 15px; color: var(--if-primary);">
+                {{ request.session.noise_report.target_col|default:features.target|default:"Not specified" }}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 7. Feature Selection & Importance -->
+    <section id="sec-features" class="report-section">
+      <div class="report-section-header">
+        <span class="report-section-num">7</span>
+        <h2 class="report-section-title">Feature Selection & Importance</h2>
+      </div>
+      <div class="if-card">
+        <div class="if-card-body">
+          <div class="if-grid-4" style="gap: 16px; margin-bottom: 20px;">
+            <div class="if-metric-card">
+              <div class="if-metric-value" style="font-size: 16px; font-weight: 700;">{{ features.target|default:request.session.target_column|default:"Not specified" }}</div>
+              <div class="if-metric-label">Target Variable</div>
+            </div>
+            <div class="if-metric-card">
+              <div class="if-metric-value" style="font-size: 16px; font-weight: 700;">{{ features.method|default:"Manual Selection" }}</div>
+              <div class="if-metric-label">Selection Method</div>
+            </div>
+            <div class="if-metric-card">
+              <div class="if-metric-value">{{ features.original_count }}</div>
+              <div class="if-metric-label">Original Candidate Features</div>
+            </div>
+            <div class="if-metric-card" style="border-left: 3px solid var(--if-success);">
+              <div class="if-metric-value" style="color: var(--if-success);">{{ features.selected_count }}</div>
+              <div class="if-metric-label">Features Selected</div>
+            </div>
+          </div>
+
+          <h3 style="font-size: 14px; font-weight: 700; margin-bottom: 12px;">Selected Predictor Variables</h3>
+          <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px;">
+            {% for feat in features.selected_list %}
+              <span class="if-badge if-badge-primary" style="font-size: 13px; padding: 6px 12px;">
+                <i data-lucide="check" class="if-icon-sm"></i> {{ feat }}
+              </span>
+            {% empty %}
+              <span style="font-size: 13px; color: var(--if-text-muted);">All available features were retained.</span>
+            {% endfor %}
+          </div>
+
+          {% if features.scores %}
+          <h3 style="font-size: 14px; font-weight: 700; margin-bottom: 12px;">Feature Relevance Scores</h3>
+          <div class="if-table-wrap">
+            <table class="if-table">
+              <thead>
+                <tr>
+                  <th>Feature Name</th>
+                  <th>Calculated Score</th>
+                  <th>Relative Score Representation</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for feat, score in features.scores.items %}
+                <tr>
+                  <td><strong>{{ feat }}</strong></td>
+                  <td>{{ score|floatformat:4 }}</td>
+                  <td>
+                    <div class="score-bar-bg">
+                      <div class="score-bar-fill" style="width: 80%;"></div>
+                    </div>
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </section>
+
+    <!-- 8. Feature Scaling -->
+    <section id="sec-scaling" class="report-section">
+      <div class="report-section-header">
+        <span class="report-section-num">8</span>
+        <h2 class="report-section-title">Feature Scaling</h2>
+      </div>
+      <div class="if-card">
+        <div class="if-card-body">
+          <div class="if-grid-3" style="gap: 16px; margin-bottom: 16px;">
+            <div class="if-metric-card">
+              <div class="if-metric-value" style="font-size: 18px; font-weight: 700;">{{ scaling.method|default:"Not Applied" }}</div>
+              <div class="if-metric-label">Scaling Method</div>
+            </div>
+            <div class="if-metric-card">
+              <div class="if-metric-value">
+                {% if scaling.applied %}<span style="color: var(--if-success);">Applied</span>{% else %}Skipped{% endif %}
+              </div>
+              <div class="if-metric-label">Scaling Status</div>
+            </div>
+            <div class="if-metric-card">
+              <div class="if-metric-value">{{ scaling.features_count }}</div>
+              <div class="if-metric-label">Features Scaled</div>
+            </div>
+          </div>
+          <div class="if-alert if-alert-info">
+            <i data-lucide="info" class="if-alert-icon"></i>
+            <div class="if-alert-content">
+              <strong>Target Protection Guaranteed:</strong> Feature scaling was strictly applied to selected numeric predictor variables only. The target variable (<code>{{ features.target|default:request.session.target_column|default:"target" }}</code>) was protected and not modified during scaling.
+            </div>
+          </div>
+          {% if scaling.justification %}
+          <p style="font-size: 13px; color: var(--if-text-muted); margin-top: 12px;">
+            {{ scaling.justification }}
+          </p>
+          {% endif %}
+        </div>
+      </div>
+    </section>
+
+    <!-- 9. Pipeline Visual Insights -->
+    <section id="sec-viz" class="report-section">
+      <div class="report-section-header">
+        <span class="report-section-num">9</span>
+        <h2 class="report-section-title">Pipeline Visual Insights</h2>
+      </div>
+      <div class="if-card">
+        <div class="if-card-body">
+          {% if visualization.key_visuals %}
+          <div class="if-flex-col" style="gap: 24px;">
+            {% for chart in visualization.key_visuals %}
+            <div class="visual-card">
+              <div class="if-flex-between" style="margin-bottom: 4px;">
+                <strong class="visual-card-title">{{ chart.title }}</strong>
+                <span class="if-badge if-badge-primary">{{ chart.type }}</span>
+              </div>
+              <div class="visual-card-desc">
+                {{ chart.description }}
+              </div>
+              <div class="visual-plot-container" style="width: 100%; overflow-x: auto; background: var(--if-surface); border-radius: var(--if-radius-sm); border: 1px solid var(--if-border); padding: 8px;">
+                {{ chart.plot_html|safe }}
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+          {% elif visualization.chart_details %}
+          <div class="if-grid-2" style="gap: 16px;">
+            {% for chart in visualization.chart_details %}
+              {% if forloop.counter <= 4 %}
+              <div class="visual-card">
+                <div class="if-flex-between" style="margin-bottom: 4px;">
+                  <strong class="visual-card-title">{{ chart.type }}</strong>
+                  <span class="if-badge if-badge-primary">Visual #{{ chart.number }}</span>
+                </div>
+                <div class="visual-card-desc">
+                  {{ chart.description }}
+                </div>
+              </div>
+              {% endif %}
+            {% endfor %}
+          </div>
+          {% else %}
+          <div class="if-empty-state">
+            <div class="if-empty-icon"><i data-lucide="pie-chart" class="if-icon-lg"></i></div>
+            <div class="if-empty-title">Pipeline Visual Insights</div>
+            <div class="if-empty-desc">No pipeline visualizations are available for this report. Complete the Visualization stage to generate visual insights.</div>
+            <a href="{% url 'visualization_dashboard' %}" class="if-btn if-btn-primary">
+              <i data-lucide="bar-chart-2" class="if-icon"></i>
+              <span>Open Visualization Dashboard</span>
+            </a>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </section>
+
+    <!-- 10. Model Training & Algorithm Explanation -->
+    <section id="sec-model" class="report-section">
+      <div class="report-section-header">
+        <span class="report-section-num">10</span>
+        <h2 class="report-section-title">Model Training & Algorithm Rationale</h2>
+      </div>
+      <div class="if-card">
+        <div class="if-card-body">
+          <div class="if-grid-3" style="gap: 16px; margin-bottom: 20px;">
+            <div class="if-metric-card">
+              <div class="if-metric-value" style="text-transform: capitalize;">{{ models.task_type|default:"Classification" }}</div>
+              <div class="if-metric-label">Problem Task</div>
+            </div>
+            <div class="if-metric-card">
+              <div class="if-metric-value">{{ models.models_count }}</div>
+              <div class="if-metric-label">Models Trained & Evaluated</div>
+            </div>
+            <div class="if-metric-card" style="border-left: 3.5px solid var(--if-success);">
+              <div class="if-metric-value" style="color: var(--if-success); font-size: 18px;">{{ models.best_model|default:"Not trained" }}</div>
+              <div class="if-metric-label">Best Performing Algorithm</div>
+            </div>
+          </div>
+
+          <div style="padding: 16px; background: var(--if-surface-2); border-radius: var(--if-radius-md); border-left: 4px solid var(--if-primary); margin-bottom: 20px;">
+            <h3 style="font-size: 15px; font-weight: 700; color: var(--if-text); margin-bottom: 6px;">Why This Algorithm?</h3>
+            <p style="font-size: 13px; color: var(--if-text-secondary); line-height: 1.6; margin: 0;">
+              {% if "Random Forest" in models.best_model %}
+                <strong>Random Forest</strong> was selected as the optimal model for this {{ models.task_type }} task because it effectively captures complex non-linear feature interactions, manages high feature variance without overfitting, and provides reliable ensemble stability.
+              {% elif "Decision Tree" in models.best_model %}
+                <strong>Decision Tree</strong> was selected for its high interpretability, non-parametric boundary modeling, and direct decision paths.
+              {% elif "Logistic Regression" in models.best_model %}
+                <strong>Logistic Regression</strong> was selected because it provides calibrated probability estimations, robust linear decision boundaries, and prevents overfitting on linearly separable features.
+              {% elif "Linear Regression" in models.best_model %}
+                <strong>Linear Regression</strong> provides an optimal, highly interpretable linear relationship between feature variables and the continuous target.
+              {% else %}
+                <strong>{{ models.best_model|default:"Selected Algorithm" }}</strong> achieved superior generalization metrics compared to alternative benchmark algorithms evaluated during cross-validation.
+              {% endif %}
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 11. Model Evaluation & Benchmarks (Single Final Model Evaluation Chart Only) -->
+    <section id="sec-eval" class="report-section">
+      <div class="report-section-header">
+        <span class="report-section-num">11</span>
+        <h2 class="report-section-title">Model Evaluation & Benchmarks</h2>
+      </div>
+      <div class="if-card">
+        <div class="if-card-body">
+          {% if models.comparison_table %}
+          <div class="if-table-wrap" style="margin-bottom: 24px;">
+            <table class="if-table">
+              <thead>
+                <tr>
+                  <th>Algorithm</th>
+                  {% if models.task_type == 'classification' %}
+                    <th>Accuracy</th>
+                    <th>Precision</th>
+                    <th>Recall</th>
+                    <th>F1 Score</th>
+                  {% else %}
+                    <th>R² Score</th>
+                    <th>MAE</th>
+                    <th>RMSE</th>
+                  {% endif %}
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in models.comparison_table %}
+                <tr {% if row.is_best %}style="background: var(--if-primary-light);"{% endif %}>
+                  <td><strong>{{ row.model }}</strong></td>
+                  {% if models.task_type == 'classification' %}
+                    <td>{{ row.accuracy|floatformat:4 }}</td>
+                    <td>{{ row.precision|floatformat:4 }}</td>
+                    <td>{{ row.recall|floatformat:4 }}</td>
+                    <td><strong>{{ row.f1|floatformat:4 }}</strong></td>
+                  {% else %}
+                    <td><strong>{{ row.r2|floatformat:4 }}</strong></td>
+                    <td>{{ row.mae|floatformat:4 }}</td>
+                    <td>{{ row.rmse|floatformat:4 }}</td>
+                  {% endif %}
+                  <td>
+                    {% if row.is_best %}
+                      <span class="status-pill status-pill-success"><i data-lucide="award" class="if-icon-sm"></i> Best Model</span>
+                    {% else %}
+                      <span class="status-pill status-pill-neutral">Benchmark</span>
+                    {% endif %}
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Final Model Evaluation Chart ONLY (1 Chart Maximum) -->
+          {% if visualization.existing_images %}
+            {% if models.task_type == 'classification' %}
+              {# Render ONLY 1 Confusion Matrix for the Final Best Model #}
+              {% for img in visualization.existing_images %}
+                {% if 'confusion' in img.filename or img.type == 'Confusion Matrix' %}
+                  {% if forloop.last %}
+                  <div class="visual-card" style="margin-top: 16px;">
+                    <div class="if-flex-between" style="margin-bottom: 4px;">
+                      <strong class="visual-card-title">Confusion Matrix — {{ models.best_model }}</strong>
+                      <span class="if-badge if-badge-primary">Final Model Evaluation</span>
+                    </div>
+                    <div class="visual-card-desc">
+                      The confusion matrix evaluates classification precision and recall for the selected optimal model (<strong>{{ models.best_model }}</strong>) across target classes.
+                    </div>
+                    <img src="{{ img.url }}" alt="Confusion Matrix - {{ models.best_model }}" style="max-width: 520px; width: 100%; height: auto; display: block; margin: 0 auto; border-radius: var(--if-radius-sm); border: 1px solid var(--if-border);">
+                  </div>
+                  {% endif %}
+                {% endif %}
+              {% endfor %}
+            {% else %}
+              {# Render ONLY 1 Actual vs Predicted for Regression #}
+              {% for img in visualization.existing_images %}
+                {% if 'actual' in img.filename or img.type == 'Actual vs Predicted' %}
+                  {% if forloop.last %}
+                  <div class="visual-card" style="margin-top: 16px;">
+                    <div class="if-flex-between" style="margin-bottom: 4px;">
+                      <strong class="visual-card-title">Actual vs. Predicted Plot — {{ models.best_model }}</strong>
+                      <span class="if-badge if-badge-primary">Final Model Evaluation</span>
+                    </div>
+                    <div class="visual-card-desc">
+                      The actual vs. predicted plot illustrates continuous estimation accuracy for <strong>{{ models.best_model }}</strong> along the ideal 45° regression line.
+                    </div>
+                    <img src="{{ img.url }}" alt="Actual vs Predicted - {{ models.best_model }}" style="max-width: 520px; width: 100%; height: auto; display: block; margin: 0 auto; border-radius: var(--if-radius-sm); border: 1px solid var(--if-border);">
+                  </div>
+                  {% endif %}
+                {% endif %}
+              {% endfor %}
+            {% endif %}
+          {% endif %}
+
+          {% else %}
+          <div class="if-empty-state">
+            <div class="if-empty-icon"><i data-lucide="cpu" class="if-icon-lg"></i></div>
+            <div class="if-empty-title">No Model Benchmark Results</div>
+            <div class="if-empty-desc">Train models in the Model Engine step to compare evaluation metrics and generate benchmarking tables.</div>
+            <a href="{% url 'model_training' %}" class="if-btn if-btn-primary">
+              <i data-lucide="play" class="if-icon"></i>
+              <span>Train Models Now</span>
+            </a>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </section>
+
+    <!-- 12. Prediction & Inference -->
+    <section id="sec-prediction" class="report-section">
+      <div class="report-section-header">
+        <span class="report-section-num">12</span>
+        <h2 class="report-section-title">Prediction & Inference Status</h2>
+      </div>
+      <div class="if-card">
+        <div class="if-card-body">
+          <div class="if-grid-3" style="gap: 16px;">
+            <div class="if-metric-card">
+              <div class="if-metric-value">
+                {% if prediction.model_ready %}<span style="color: var(--if-success);">Ready</span>{% else %}Not Loaded{% endif %}
+              </div>
+              <div class="if-metric-label">Inference Engine Readiness</div>
+            </div>
+            <div class="if-metric-card">
+              <div class="if-metric-value">
+                {% if prediction.performed %}<span style="color: var(--if-primary);">Executed</span>{% else %}Pending{% endif %}
+              </div>
+              <div class="if-metric-label">Prediction Status</div>
+            </div>
+            <div class="if-metric-card">
+              <div class="if-metric-value">{{ prediction.samples }}</div>
+              <div class="if-metric-label">Inference Samples Evaluated</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 13. Key Findings & Recommendations -->
+    <section id="sec-findings" class="report-section">
+      <div class="report-section-header">
+        <span class="report-section-num">13</span>
+        <h2 class="report-section-title">Key Findings & Technical Recommendations</h2>
+      </div>
+      <div class="if-card">
+        <div class="if-card-body">
+          <h3 style="font-size: 14px; font-weight: 700; margin-bottom: 10px;">Audit Key Findings</h3>
+          <ul style="font-size: 13px; color: var(--if-text-secondary); line-height: 1.8; margin-bottom: 20px; padding-left: 20px;">
+            <li>Dataset <strong>{{ request.session.dataset_name|default:"Uploaded Dataset" }}</strong> containing {{ dataset.total_rows }} observations and {{ dataset.total_columns }} features was successfully audited.</li>
+            <li>Handled {{ dataset.missing_handled }} missing values and purged {{ dataset.duplicates }} duplicate rows.</li>
+            <li>Selected <strong>{{ features.selected_count }}</strong> predictor variables for model training targeting <strong>{{ features.target|default:request.session.target_column|default:"target" }}</strong>.</li>
+            <li>Best model algorithm <strong>{{ models.best_model|default:"Trained Model" }}</strong> achieved top performance metrics during pipeline evaluation.</li>
+          </ul>
+
+          <h3 style="font-size: 14px; font-weight: 700; margin-bottom: 10px;">Engineering Recommendations</h3>
+          <div class="if-flex-col" style="gap: 8px;">
+            {% for rec in conclusion.recommendations %}
+            <div class="if-alert if-alert-info" style="margin-bottom: 0;">
+              <i data-lucide="check-circle-2" class="if-alert-icon"></i>
+              <div class="if-alert-content">{{ rec }}</div>
+            </div>
+            {% empty %}
+            <div class="if-alert if-alert-success" style="margin-bottom: 0;">
+              <i data-lucide="check-circle-2" class="if-alert-icon"></i>
+              <div class="if-alert-content">Pipeline is fully configured and ready for production inference deployments.</div>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 14. Pipeline Status -->
+    <section id="sec-pipeline" class="report-section">
+      <div class="report-section-header">
+        <span class="report-section-num">14</span>
+        <h2 class="report-section-title">Pipeline Execution Completeness</h2>
+      </div>
+      <div class="if-card">
+        <div class="if-card-body">
+          <div class="if-flex-between" style="margin-bottom: 12px;">
+            <span style="font-weight: 700; font-size: 14px;">Overall Pipeline Readiness</span>
+            <span class="if-badge if-badge-primary">{{ conclusion.completeness }}% Completed</span>
+          </div>
+          <div class="if-progress-container" style="margin-bottom: 20px;">
+            <div class="if-progress-bar">
+              <div class="if-progress-fill" style="width: {{ conclusion.completeness }}%;"></div>
+            </div>
+          </div>
+
+          <div class="if-grid-4" style="gap: 12px;">
+            <div style="padding: 10px; background: var(--if-surface-2); border-radius: var(--if-radius-sm); border: 1px solid var(--if-border); font-size: 12px;">
+              <i data-lucide="check" class="if-icon-sm" style="color: var(--if-success);"></i> <strong>1. Upload:</strong> Completed
+            </div>
+            <div style="padding: 10px; background: var(--if-surface-2); border-radius: var(--if-radius-sm); border: 1px solid var(--if-border); font-size: 12px;">
+              <i data-lucide="check" class="if-icon-sm" style="color: var(--if-success);"></i> <strong>2. Cleaning:</strong> Completed
+            </div>
+            <div style="padding: 10px; background: var(--if-surface-2); border-radius: var(--if-radius-sm); border: 1px solid var(--if-border); font-size: 12px;">
+              <i data-lucide="check" class="if-icon-sm" style="color: var(--if-success);"></i> <strong>3. Outliers:</strong> Handled
+            </div>
+            <div style="padding: 10px; background: var(--if-surface-2); border-radius: var(--if-radius-sm); border: 1px solid var(--if-border); font-size: 12px;">
+              <i data-lucide="check" class="if-icon-sm" style="color: var(--if-success);"></i> <strong>4. Noise:</strong> Audited
+            </div>
+            <div style="padding: 10px; background: var(--if-surface-2); border-radius: var(--if-radius-sm); border: 1px solid var(--if-border); font-size: 12px;">
+              <i data-lucide="check" class="if-icon-sm" style="color: var(--if-success);"></i> <strong>5. Features:</strong> {{ features.selected_count }} Selected
+            </div>
+            <div style="padding: 10px; background: var(--if-surface-2); border-radius: var(--if-radius-sm); border: 1px solid var(--if-border); font-size: 12px;">
+              <i data-lucide="check" class="if-icon-sm" style="color: var(--if-success);"></i> <strong>6. Scaling:</strong> {{ scaling.method }}
+            </div>
+            <div style="padding: 10px; background: var(--if-surface-2); border-radius: var(--if-radius-sm); border: 1px solid var(--if-border); font-size: 12px;">
+              <i data-lucide="check" class="if-icon-sm" style="color: var(--if-success);"></i> <strong>7. Training:</strong> {{ models.best_model }}
+            </div>
+            <div style="padding: 10px; background: var(--if-surface-2); border-radius: var(--if-radius-sm); border: 1px solid var(--if-border); font-size: 12px;">
+              <i data-lucide="check" class="if-icon-sm" style="color: var(--if-success);"></i> <strong>8. Report:</strong> Generated
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+{% endblock %}

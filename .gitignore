@@ -1,0 +1,48 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environments
+venv/
+.venv/
+env/
+.env
+ENV/
+env.bak/
+venv.bak/
+
+# Django stuff
+*.log
+insightforge.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+
+# Session storage / generated artifacts
+saved_datasets/*.csv
+saved_datasets/*.json
+saved_datasets/*.xlsx
+saved_models/*
+!saved_models/.gitkeep
+saved_scalers/*
+!saved_scalers/.gitkeep
+saved_reports/*
+!saved_reports/.gitkeep
+generated_charts/*
+!generated_charts/.gitkeep
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE & Editor files
+.vscode/
+.idea/
+*.swp
+*.swo

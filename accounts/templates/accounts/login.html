@@ -1,0 +1,71 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login | InsightForge ML Platform</title>
+  <link rel="stylesheet" href="{% static 'css/insightforge.css' %}">
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+
+<div class="if-auth-layout">
+  <!-- Brand -->
+  <div class="if-auth-brand">
+    <div class="if-auth-brand-logo">
+      <i data-lucide="cpu" class="if-icon-lg"></i>
+    </div>
+    <div class="if-auth-brand-title">InsightForge</div>
+  </div>
+
+  <!-- Auth Card -->
+  <div class="if-auth-card">
+    <div class="if-auth-header">
+      <h1 class="if-auth-title">Welcome back</h1>
+      <p class="if-auth-sub">Enter your credentials to access your workspace</p>
+    </div>
+
+    <!-- Django Messages -->
+    {% if messages %}
+      {% for message in messages %}
+        <div class="if-alert if-alert-{% if message.tags == 'error' %}danger{% else %}{{ message.tags }}{% endif %}">
+          <i data-lucide="{% if message.tags == 'error' %}alert-circle{% else %}check-circle{% endif %}" class="if-alert-icon"></i>
+          <div class="if-alert-content">{{ message }}</div>
+        </div>
+      {% endfor %}
+    {% endif %}
+
+    <form method="post" class="if-flex-col" style="gap: 16px;">
+      {% csrf_token %}
+      
+      <div class="if-form-group">
+        <label class="if-form-label if-form-label-req" for="email">Email Address</label>
+        <input type="email" id="email" name="email" class="if-input" placeholder="name@company.com" required autocomplete="email">
+      </div>
+
+      <div class="if-form-group">
+        <label class="if-form-label if-form-label-req" for="password">Password</label>
+        <input type="password" id="password" name="password" class="if-input" placeholder="••••••••" required autocomplete="current-password">
+      </div>
+
+      <button type="submit" class="if-btn if-btn-primary if-btn-block" style="margin-top: 8px;">
+        <i data-lucide="log-in" class="if-icon"></i>
+        <span>Sign In</span>
+      </button>
+    </form>
+
+    <div class="if-auth-footer">
+      Don't have an account? <a href="{% url 'register' %}" style="font-weight:600;">Create account</a>
+    </div>
+  </div>
+
+  <!-- Theme toggle -->
+  <div style="margin-top: 24px;">
+    <button class="if-dark-toggle" title="Toggle theme" aria-label="Toggle dark mode">🌙</button>
+  </div>
+</div>
+
+<script src="{% static 'js/insightforge.js' %}"></script>
+</body>
+</html>

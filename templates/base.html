@@ -1,0 +1,325 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="{% block meta_description %}InsightForge — Professional ML Pipeline Platform{% endblock %}">
+  <title>{% block title %}InsightForge{% endblock %} | InsightForge ML Platform</title>  <!-- Design System CSS -->
+  <link rel="stylesheet" href="{% static 'css/insightforge.css' %}">
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Page-specific CSS -->
+  {% block extra_css %}{% endblock %}
+</head>
+<body>
+
+<!-- ════════════════════════════════════════════════════════════
+     MOBILE SIDEBAR OVERLAY
+═════════════════════════════════════════════════════════════════ -->
+<div id="sidebar-overlay" style="
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.5);
+  z-index: 99;
+  backdrop-filter: blur(2px);
+"></div>
+
+<!-- ════════════════════════════════════════════════════════════
+     APP SHELL
+═════════════════════════════════════════════════════════════════ -->
+<div class="if-app">
+
+  <!-- ── SIDEBAR ──────────────────────────────────────────── -->
+  <aside class="if-sidebar">
+
+    <!-- Logo -->
+    <div class="if-sidebar-logo">
+      <div class="logo-icon"><i data-lucide="cpu" style="width:20px;height:20px;color:white;"></i></div>
+      <div>
+        <div class="logo-text">InsightForge</div>
+        <div class="logo-sub">ML Platform</div>
+      </div>
+    </div>
+
+    <!-- Navigation -->
+    <nav class="if-nav">
+
+      <div class="if-nav-group">
+        <div class="if-nav-group-label">Getting Started</div>
+        <a href="{% url 'upload_dataset' %}" class="if-nav-item {% if request.resolver_match.url_name == 'upload_dataset' %}active{% elif 'dataset' in request.session %}completed{% endif %}">
+          <span class="if-nav-icon"><i data-lucide="upload-cloud" class="if-icon"></i></span>
+          <span>Upload Dataset</span>
+          {% if 'dataset' in request.session %}<span class="if-nav-badge">✓</span>{% endif %}
+        </a>
+        <a href="{% url 'ml_dashboard' %}" class="if-nav-item {% if request.resolver_match.url_name == 'automl' %}active{% endif %}" id="nav-automl">
+          <span class="if-nav-icon"><i data-lucide="zap" class="if-icon"></i></span>
+          <span>AutoML Mode</span>
+          <span style="font-size:9px;background:var(--if-primary);color:white;padding:1px 6px;border-radius:99px;font-weight:700;margin-left:auto;">AUTO</span>
+        </a>
+      </div>
+
+      <div class="if-nav-group">
+        <div class="if-nav-group-label">Manual Pipeline</div>
+
+        <a href="{% url 'clean_data' %}" class="if-nav-item {% if request.resolver_match.url_name == 'clean_data' %}active{% elif 'cleaned_dataset' in request.session %}completed{% endif %}">
+          <span class="if-nav-icon"><i data-lucide="sparkles" class="if-icon"></i></span>
+          <span>Data Cleaning</span>
+          {% if 'cleaned_dataset' in request.session %}<span class="if-nav-badge">✓</span>{% endif %}
+        </a>
+
+        <a href="{% url 'outlier_detection' %}" class="if-nav-item {% if 'outlier' in request.resolver_match.url_name %}active{% elif 'outlier_free_dataset' in request.session %}completed{% endif %}">
+          <span class="if-nav-icon"><i data-lucide="activity" class="if-icon"></i></span>
+          <span>Outlier Handling</span>
+          {% if 'outlier_free_dataset' in request.session %}<span class="if-nav-badge">✓</span>{% endif %}
+        </a>
+
+        <a href="{% url 'label_noise' %}" class="if-nav-item {% if request.resolver_match.url_name == 'label_noise' %}active{% elif 'noise_free_dataset' in request.session or 'noise_detection_completed' in request.session %}completed{% endif %}">
+          <span class="if-nav-icon"><i data-lucide="tag" class="if-icon"></i></span>
+          <span>Label Noise</span>
+          {% if 'noise_free_dataset' in request.session or 'noise_detection_completed' in request.session %}<span class="if-nav-badge">✓</span>{% endif %}
+        </a>
+
+        <a href="/visualization/" class="if-nav-item {% if 'visualization' in request.path or request.resolver_match.url_name == 'dashboard' %}active{% elif 'visualization_completed' in request.session or 'final_dataset' in request.session %}completed{% endif %}">
+          <span class="if-nav-icon"><i data-lucide="bar-chart-2" class="if-icon"></i></span>
+          <span>Visualization</span>
+          {% if 'visualization_completed' in request.session or 'final_dataset' in request.session %}<span class="if-nav-badge">✓</span>{% endif %}
+        </a>
+
+        <a href="{% url 'feature_selection' %}" class="if-nav-item {% if 'feature_selection' in request.resolver_match.url_name %}active{% elif 'final_dataset' in request.session %}completed{% endif %}">
+          <span class="if-nav-icon"><i data-lucide="filter" class="if-icon"></i></span>
+          <span>Feature Selection</span>
+          {% if 'final_dataset' in request.session or 'scaled_dataset' in request.session %}<span class="if-nav-badge">✓</span>{% endif %}
+        </a>
+
+        <a href="{% url 'scale_features' %}" class="if-nav-item {% if request.resolver_match.url_name == 'scale_features' %}active{% elif 'scaled_dataset' in request.session %}completed{% endif %}">
+          <span class="if-nav-icon"><i data-lucide="sliders" class="if-icon"></i></span>
+          <span>Feature Scaling</span>
+          {% if 'scaled_dataset' in request.session %}<span class="if-nav-badge">✓</span>{% endif %}
+        </a>
+      </div>
+
+      <div class="if-nav-group">
+        <div class="if-nav-group-label">Machine Learning</div>
+
+        <a href="{% url 'model_training' %}" class="if-nav-item {% if request.resolver_match.url_name == 'model_training' %}active{% elif 'model_path' in request.session %}completed{% endif %}">
+          <span class="if-nav-icon"><i data-lucide="bot" class="if-icon"></i></span>
+          <span>Model Training</span>
+          {% if 'model_path' in request.session %}<span class="if-nav-badge">✓</span>{% endif %}
+        </a>
+
+        <a href="{% url 'predict' %}" class="if-nav-item {% if request.resolver_match.url_name == 'predict' %}active{% endif %}">
+          <span class="if-nav-icon"><i data-lucide="play-circle" class="if-icon"></i></span>
+          <span>Prediction</span>
+        </a>
+      </div>
+
+      <div class="if-nav-group">
+        <div class="if-nav-group-label">Reports</div>
+
+        <a href="{% url 'generate_report' %}" class="if-nav-item {% if request.resolver_match.url_name == 'generate_report' %}active{% endif %}">
+          <span class="if-nav-icon"><i data-lucide="file-text" class="if-icon"></i></span>
+          <span>Generate Report</span>
+        </a>
+
+        <a href="{% url 'saved_reports' %}" class="if-nav-item {% if request.resolver_match.url_name == 'saved_reports' %}active{% endif %}">
+          <span class="if-nav-icon"><i data-lucide="folder" class="if-icon"></i></span>
+          <span>Saved Reports</span>
+        </a>
+      </div>
+
+      <div class="if-nav-group">
+        <div class="if-nav-group-label">Account</div>
+        {% if request.user.is_authenticated or request.session.mongo_user %}
+        <a href="{% url 'login' %}" class="if-nav-item">
+          <span class="if-nav-icon"><i data-lucide="user" class="if-icon"></i></span>
+          <span>{% if request.session.mongo_user %}{{ request.session.mongo_user }}{% else %}{{ request.user.username }}{% endif %}</span>
+        </a>
+        {% else %}
+        <a href="{% url 'login' %}" class="if-nav-item {% if request.resolver_match.url_name == 'login' %}active{% endif %}">
+          <span class="if-nav-icon"><i data-lucide="log-in" class="if-icon"></i></span>
+          <span>Login</span>
+        </a>
+        <a href="{% url 'register' %}" class="if-nav-item {% if request.resolver_match.url_name == 'register' %}active{% endif %}">
+          <span class="if-nav-icon"><i data-lucide="user-plus" class="if-icon"></i></span>
+          <span>Register</span>
+        </a>
+        {% endif %}
+      </div>
+
+    </nav><!-- end .if-nav -->
+
+    <!-- Sidebar footer -->
+    <div style="padding:12px 16px;border-top:1px solid rgba(255,255,255,.06);font-size:11px;color:rgba(255,255,255,.25);text-align:center;">
+      InsightForge v2.0 · ML Platform
+    </div>
+
+  </aside><!-- end .if-sidebar -->
+
+
+  <!-- ── MAIN CONTENT ─────────────────────────────────────── -->
+  <main class="if-main">
+
+    <!-- Topbar -->
+    <header class="if-topbar">
+      <!-- Mobile hamburger -->
+      <button class="sidebar-toggle if-btn if-btn-ghost if-btn-icon" style="display:none;" id="sidebar-toggle-btn" aria-label="Toggle sidebar">
+        ☰
+      </button>
+
+      <div class="if-topbar-title">{% block page_title %}InsightForge{% endblock %}</div>
+
+      <div class="if-topbar-actions">
+        <!-- Pipeline status badge -->
+        {% if request.session.model_path %}
+          <span class="if-badge if-badge-success if-badge-live">Model Ready</span>
+        {% elif request.session.scaled_dataset %}
+          <span class="if-badge if-badge-info">Scaling Done</span>
+        {% elif request.session.final_dataset %}
+          <span class="if-badge if-badge-primary">Features Selected</span>
+        {% elif request.session.cleaned_dataset %}
+          <span class="if-badge if-badge-warning">Data Cleaned</span>
+        {% elif request.session.dataset %}
+          <span class="if-badge if-badge-neutral">Dataset Loaded</span>
+        {% endif %}
+
+        <!-- Dark mode toggle -->
+        <button class="if-dark-toggle" title="Toggle dark mode" aria-label="Toggle dark mode">🌙</button>
+      </div>
+    </header>
+
+    <!-- Pipeline Stepper -->
+    {% block show_stepper %}
+    <div style="padding: 0 28px; background: var(--if-surface); border-bottom: 1px solid var(--if-border); overflow-x: auto;">
+      <div class="if-stepper" role="navigation" aria-label="Pipeline steps">
+
+        {% with steps='' %}
+        {% comment %}Upload{% endcomment %}
+        <div class="if-step {% if request.resolver_match.url_name == 'upload_dataset' %}active{% elif 'dataset' in request.session %}completed{% endif %}">
+          <a href="{% url 'upload_dataset' %}" class="if-step-dot" title="Upload Dataset" style="text-decoration:none;">
+            <span class="step-num">{% if 'dataset' in request.session %}✓{% else %}1{% endif %}</span>
+            <span>Upload</span>
+          </a>
+        </div>
+        <div class="if-step-connector"></div>
+
+        <div class="if-step {% if request.resolver_match.url_name == 'clean_data' %}active{% elif 'cleaned_dataset' in request.session %}completed{% endif %}">
+          <a href="{% url 'clean_data' %}" class="if-step-dot" title="Clean Data" style="text-decoration:none;">
+            <span class="step-num">{% if 'cleaned_dataset' in request.session %}✓{% else %}2{% endif %}</span>
+            <span>Clean</span>
+          </a>
+        </div>
+        <div class="if-step-connector"></div>
+
+        <div class="if-step {% if 'outlier' in request.resolver_match.url_name %}active{% elif 'outlier_free_dataset' in request.session %}completed{% endif %}">
+          <a href="{% url 'outlier_detection' %}" class="if-step-dot" title="Outlier Handling" style="text-decoration:none;">
+            <span class="step-num">{% if 'outlier_free_dataset' in request.session %}✓{% else %}3{% endif %}</span>
+            <span>Outliers</span>
+          </a>
+        </div>
+        <div class="if-step-connector"></div>
+
+        <div class="if-step {% if request.resolver_match.url_name == 'label_noise' %}active{% elif 'noise_free_dataset' in request.session or 'noise_detection_completed' in request.session %}completed{% endif %}">
+          <a href="{% url 'label_noise' %}" class="if-step-dot" title="Label Noise" style="text-decoration:none;">
+            <span class="step-num">{% if 'noise_free_dataset' in request.session or 'noise_detection_completed' in request.session %}✓{% else %}4{% endif %}</span>
+            <span>Noise</span>
+          </a>
+        </div>
+        <div class="if-step-connector"></div>
+
+        <div class="if-step {% if 'visualization' in request.path or request.resolver_match.url_name == 'dashboard' %}active{% elif 'visualization_completed' in request.session or 'final_dataset' in request.session %}completed{% endif %}">
+          <a href="/visualization/" class="if-step-dot" title="Visualization" style="text-decoration:none;">
+            <span class="step-num">{% if 'visualization_completed' in request.session or 'final_dataset' in request.session %}✓{% else %}5{% endif %}</span>
+            <span>Visualize</span>
+          </a>
+        </div>
+        <div class="if-step-connector"></div>
+
+        <div class="if-step {% if 'feature_selection' in request.resolver_match.url_name %}active{% elif 'final_dataset' in request.session or 'scaled_dataset' in request.session %}completed{% endif %}">
+          <a href="{% url 'feature_selection' %}" class="if-step-dot" title="Feature Selection" style="text-decoration:none;">
+            <span class="step-num">{% if 'final_dataset' in request.session or 'scaled_dataset' in request.session %}✓{% else %}6{% endif %}</span>
+            <span>Features</span>
+          </a>
+        </div>
+        <div class="if-step-connector"></div>
+
+        <div class="if-step {% if request.resolver_match.url_name == 'scale_features' %}active{% elif 'scaled_dataset' in request.session %}completed{% endif %}">
+          <a href="{% url 'scale_features' %}" class="if-step-dot" title="Feature Scaling" style="text-decoration:none;">
+            <span class="step-num">{% if 'scaled_dataset' in request.session %}✓{% else %}7{% endif %}</span>
+            <span>Scale</span>
+          </a>
+        </div>
+        <div class="if-step-connector"></div>
+
+        <div class="if-step {% if request.resolver_match.url_name == 'model_training' %}active{% elif 'model_path' in request.session %}completed{% endif %}">
+          <a href="{% url 'model_training' %}" class="if-step-dot" title="Model Training" style="text-decoration:none;">
+            <span class="step-num">{% if 'model_path' in request.session %}✓{% else %}8{% endif %}</span>
+            <span>Train</span>
+          </a>
+        </div>
+        <div class="if-step-connector"></div>
+
+        <div class="if-step {% if request.resolver_match.url_name == 'predict' %}active{% endif %}">
+          <a href="{% url 'predict' %}" class="if-step-dot" title="Prediction" style="text-decoration:none;">
+            <span class="step-num">9</span>
+            <span>Predict</span>
+          </a>
+        </div>
+        <div class="if-step-connector"></div>
+
+        <div class="if-step {% if request.resolver_match.url_name == 'generate_report' %}active{% endif %}">
+          <a href="{% url 'generate_report' %}" class="if-step-dot" title="Report" style="text-decoration:none;">
+            <span class="step-num">9</span>
+            <span>Report</span>
+          </a>
+        </div>
+        {% endwith %}
+      </div>
+    </div>
+    {% endblock show_stepper %}
+
+    <!-- Django Messages → rendered as hidden elements for JS to pick up -->
+    {% if messages %}
+    <div style="display:none;" aria-hidden="true">
+      {% for message in messages %}
+        <div class="if-django-message" data-type="{{ message.tags }}">{{ message }}</div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Toast container (populated by JS) -->
+    <div class="if-toast-container" id="if-toast-container" aria-live="polite" aria-atomic="true"></div>
+
+    <!-- Page content -->
+    <div class="if-content">
+      {% block content %}{% endblock %}
+    </div>
+
+  </main><!-- end .if-main -->
+
+</div><!-- end .if-app -->
+
+
+<!-- ════════════════════════════════════════════════════════════
+     SCRIPTS
+═════════════════════════════════════════════════════════════════ -->
+<script src="{% static 'js/insightforge.js' %}"></script>
+
+<!-- Mobile toggle visibility -->
+<script>
+  (function() {
+    function checkMobile() {
+      const btn = document.getElementById('sidebar-toggle-btn');
+      if (btn) btn.style.display = window.innerWidth <= 768 ? 'flex' : 'none';
+    }
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+  })();
+</script>
+
+{% block extra_js %}{% endblock %}
+
+</body>
+</html>

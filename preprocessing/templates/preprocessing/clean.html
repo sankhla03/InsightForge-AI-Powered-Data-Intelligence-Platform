@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Data Cleaning Summary{% endblock %}
+{% block page_title %}Data Cleaning Summary{% endblock %}
+
+{% block content %}
+<div class="if-page-header">
+  <div class="if-flex-between">
+    <div>
+      <h1 class="if-section-title">Data Cleaning Summary</h1>
+      <p class="if-section-sub">Automated duplicate removal, missing value imputation, and dataset integrity checks.</p>
+    </div>
+    <div class="if-flex">
+      <a href="{% url 'download_cleaned_dataset' %}" class="if-btn if-btn-secondary">
+        <i data-lucide="download" class="if-icon"></i>
+        <span>Export Clean CSV</span>
+      </a>
+      <a href="{% url 'outlier_detection' %}" class="if-btn if-btn-primary">
+        <span>Continue to Outlier Detection</span>
+        <i data-lucide="arrow-right" class="if-icon"></i>
+      </a>
+    </div>
+  </div>
+</div>
+
+<!-- Key Stat Cards -->
+<div class="if-stat-grid" style="margin-bottom: 24px;">
+  <div class="if-metric-card">
+    <div class="if-metric-icon"><i data-lucide="rows-3" class="if-icon-lg"></i></div>
+    <div class="if-metric-value">{{ original_rows }}</div>
+    <div class="if-metric-label">Original Rows</div>
+  </div>
+
+  <div class="if-metric-card" style="border-left: 3px solid var(--if-success);">
+    <div class="if-metric-icon"><i data-lucide="check-circle" class="if-icon-lg" style="color: var(--if-success);"></i></div>
+    <div class="if-metric-value" style="color: var(--if-success);">{{ cleaned_rows }}</div>
+    <div class="if-metric-label">Cleaned Rows</div>
+  </div>
+
+  <div class="if-metric-card" style="border-left: 3px solid var(--if-warning);">
+    <div class="if-metric-icon"><i data-lucide="copy-minus" class="if-icon-lg" style="color: var(--if-warning);"></i></div>
+    <div class="if-metric-value" style="color: var(--if-warning);">{{ duplicate_rows }}</div>
+    <div class="if-metric-label">Duplicates Removed</div>
+  </div>
+
+  <div class="if-metric-card">
+    <div class="if-metric-icon"><i data-lucide="columns-3" class="if-icon-lg"></i></div>
+    <div class="if-metric-value">{{ columns }}</div>
+    <div class="if-metric-label">Total Columns</div>
+  </div>
+
+  <div class="if-metric-card">
+    <div class="if-metric-icon"><i data-lucide="help-circle" class="if-icon-lg" style="color: var(--if-danger);"></i></div>
+    <div class="if-metric-value">{{ missing_before }}</div>
+    <div class="if-metric-label">Missing Before</div>
+  </div>
+
+  <div class="if-metric-card" style="border-left: 3px solid var(--if-info);">
+    <div class="if-metric-icon"><i data-lucide="shield-check" class="if-icon-lg" style="color: var(--if-info);"></i></div>
+    <div class="if-metric-value" style="color: var(--if-info);">{{ missing_handled }}</div>
+    <div class="if-metric-label">Missing Handled</div>
+  </div>
+</div>
+
+<!-- Data Table Card -->
+<div class="if-card">
+  <div class="if-card-header">
+    <i data-lucide="table" class="if-icon-lg" style="color: var(--if-primary);"></i>
+    <h2 class="if-card-title">Cleaned Dataset Inspection</h2>
+    <button class="if-btn if-btn-secondary if-btn-sm" id="toggleDataBtn" onclick="toggleFullData()">
+      <i data-lucide="eye" class="if-icon-sm"></i>
+      <span id="toggleText">Show Cleaned Dataset</span>
+    </button>
+  </div>
+  <div class="if-card-body">
+    <div id="fullDataContainer" style="display: none;">
+      <div class="if-table-controls">
+        <div class="if-table-search">
+          <i data-lucide="search" class="search-icon"></i>
+          <input type="text" id="cleaned-table-search" class="if-input" placeholder="Search rows...">
+        </div>
+      <div class="if-table-wrap">
+        <table class="if-table" id="cleaned-table">
+          <thead id="fullDataHead"></thead>
+          <tbody id="fullDataBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="emptyDataPrompt" class="if-empty-state" style="padding: 32px 16px;">
+      <div class="if-empty-icon"><i data-lucide="sparkles" class="if-icon-lg"></i></div>
+      <div class="if-empty-title">Dataset Cleaned & Ready</div>
+      <div class="if-empty-desc">Your dataset has been processed. Click above to inspect the clean records or proceed directly to outlier detection.</div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  var fullData = {{ full_data_json|safe }};
+  var isDataVisible = false;
+
+  function toggleFullData() {
+    var container = document.getElementById('fullDataContainer');
+    var prompt = document.getElementById('emptyDataPrompt');
+    var toggleText = document.getElementById('toggleText');
+    var btn = document.getElementById('toggleDataBtn');
+
+    if (!isDataVisible) {
+      container.style.display = 'block';
+      prompt.style.display = 'none';
+      toggleText.textContent = 'Hide Cleaned Dataset';
+      renderFullData();
+      IF.enhanceTable('cleaned-table', { pageSize: 15, searchable: true, sortable: true });
+    } else {
+      container.style.display = 'none';
+      prompt.style.display = 'flex';
+      toggleText.textContent = 'Show Cleaned Dataset';
+    }
+    isDataVisible = !isDataVisible;
+  }
+
+  function renderFullData() {
+    var thead = document.getElementById('fullDataHead');
+    var tbody = document.getElementById('fullDataBody');
+
+    if (!fullData || fullData.length === 0) {
+      thead.innerHTML = '<tr><th>No data available</th></tr>';
+      tbody.innerHTML = '';
+      return;
+    }
+
+    var columns = Object.keys(fullData[0]);
+
+    var headerHtml = '<tr>';
+    for (var i = 0; i < columns.length; i++) {
+      headerHtml += '<th data-sortable>' + escapeHtml(columns[i]) + '</th>';
+    }
+    headerHtml += '</tr>';
+    thead.innerHTML = headerHtml;
+
+    var bodyHtml = '';
+    for (var j = 0; j < fullData.length; j++) {
+      bodyHtml += '<tr>';
+      for (var k = 0; k < columns.length; k++) {
+        var val = fullData[j][columns[k]];
+        if (val === null || val === undefined) val = '';
+        bodyHtml += '<td>' + escapeHtml(String(val)) + '</td>';
+      }
+      bodyHtml += '</tr>';
+    }
+    tbody.innerHTML = bodyHtml;
+  }
+
+  function escapeHtml(text) {
+    var div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+</script>
+{% endblock %}
